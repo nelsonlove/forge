@@ -14,6 +14,12 @@ export type InboxRetentionAction = "delete" | "review";
 export type DataviewExpansionAutoUpdateMode = "off" | "edit_idle";
 export type ActiveFileLintAutoMode = "off" | "edit_idle";
 
+type LegacyPersistedForgeSettings = {
+  dashboardAutoRefreshEnabled?: boolean;
+  dashboardAutoRefreshIntervalMinutes?: DashboardAutoRefreshIntervalMinutes;
+  dataviewExpansionAutoUpdateMode?: DataviewExpansionAutoUpdateMode;
+};
+
 export interface FieldPointer {
   location: FieldPointerLocation;
   field: string;
@@ -270,6 +276,37 @@ export function createForgeSettings(
   }
 
   return normalizeForgeSettings(merged);
+}
+
+export function sanitizeLoadedForgeSettings(raw: unknown): Partial<ForgeSettings> {
+  const loaded = raw && typeof raw === "object"
+    ? { ...(raw as Record<string, unknown>) }
+    : {};
+
+  delete (loaded as LegacyPersistedForgeSettings).dashboardAutoRefreshEnabled;
+  delete (loaded as LegacyPersistedForgeSettings).dashboardAutoRefreshIntervalMinutes;
+  delete (loaded as LegacyPersistedForgeSettings).dataviewExpansionAutoUpdateMode;
+
+  if ("inboxRetentionAction" in loaded) {
+    loaded.inboxRetentionAction = normalizeInboxRetentionAction(loaded.inboxRetentionAction);
+  }
+
+  return loaded;
+}
+
+export function settingsForPersistence(settings: ForgeSettings): Partial<ForgeSettings> {
+  const persisted: Partial<ForgeSettings> = { ...settings };
+  delete persisted.dataviewExpansionAutoUpdateMode;
+  return persisted;
+}
+
+export function hasExternalSettingsChanged(raw: unknown, current: ForgeSettings): boolean {
+  const stored = sanitizeLoadedForgeSettings(raw);
+  const normalizedStored = settingsForPersistence(
+    normalizeForgeSettings(Object.assign({}, DEFAULT_SETTINGS, stored))
+  );
+  const normalizedCurrent = settingsForPersistence(current);
+  return JSON.stringify(normalizedStored) !== JSON.stringify(normalizedCurrent);
 }
 
 export function normalizeForgeSettings(settings: ForgeSettings): ForgeSettings {

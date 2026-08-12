@@ -55,6 +55,8 @@ import {
 import {
   createForgeSettings,
   DEFAULT_SETTINGS,
+  hasExternalSettingsChanged,
+  settingsForPersistence,
   type ForgeSettings,
 } from "../src/config/settings.js";
 import {
@@ -1027,6 +1029,39 @@ describe("plugin foundation", () => {
     assert.equal(settings.dashboardFileInventoryEnabled, false);
     assert.equal(settings.dashboardRefreshExportsEnabled, false);
     assert.equal("legacySetting" in settings, false);
+  });
+
+  it("recognizes equivalent externally persisted settings", () => {
+    const settings = createForgeSettings({
+      forgeFolder: "Forge",
+      inboxRetentionAction: "review",
+      lintStrictMode: true,
+    });
+
+    assert.equal(
+      hasExternalSettingsChanged(settingsForPersistence(settings), settings),
+      false
+    );
+    assert.equal(
+      hasExternalSettingsChanged({
+        ...settingsForPersistence(settings),
+        forgeFolder: " /Forge/ ",
+        inboxRetentionAction: "warning",
+        dashboardAutoRefreshEnabled: true,
+        dashboardAutoRefreshIntervalMinutes: 1,
+      }, settings),
+      false
+    );
+  });
+
+  it("detects a meaningful external settings change", () => {
+    const settings = createForgeSettings({ lintStrictMode: false });
+    const external = {
+      ...settingsForPersistence(settings),
+      lintStrictMode: true,
+    };
+
+    assert.equal(hasExternalSettingsChanged(external, settings), true);
   });
 
   it("keeps frontmatter presence when YAML parsing fails", () => {
