@@ -14,12 +14,21 @@ Forge 3 brings cached vault health into Obsidian Bases and adopts Obsidian 1.10.
 
 - Forge Health uses cached lint, Shape lint, and review results. Base updates never trigger a vault scan or write health fields into notes.
 - Cached lint and Shape results now record scanned file paths so Forge can distinguish clean notes from unscanned notes.
-- Settings changed outside Obsidian are detected through Obsidian's native callback instead of file polling.
-- Obsidian 1.13+ receives native declarative settings controls and search; Obsidian 1.10–1.12 retains Forge's existing settings renderer.
+- Settings changed outside Obsidian are detected through Obsidian's native callback instead of file polling. Vault Health still asks you to reload before applying synced values.
+- Obsidian 1.13+ receives native declarative settings controls, individual settings search, and inline validation where supported. Obsidian 1.10–1.12 retains Forge's existing settings renderer and persistence behavior.
 
 ## Compatibility
 
 - Forge 3 requires Obsidian `1.10.0` or newer.
 - Enable the Bases core plugin to use the Forge health layout.
 - No note or settings migration is required.
+- Run **Reload plugins** after updating so Obsidian registers the new layout.
 - Refresh Forge health once after upgrading to populate clean-versus-unscanned cache data.
+
+## After updating
+
+1. Run **Reload plugins** from the command palette.
+2. Open a Base and select the **Forge health** layout.
+3. Run **Refresh Forge health** once when you are ready to update Forge's normal lint, Shape, report, export, and cache outputs.
+
+Base filter or view-option changes remain read-only and never start that refresh automatically.
