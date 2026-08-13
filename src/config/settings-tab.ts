@@ -18,15 +18,24 @@ import {
   TFile,
   TFolder,
 } from "obsidian";
-import type { SettingDefinitionItem, SettingGroup } from "obsidian";
+import type { SettingDefinition, SettingDefinitionItem } from "obsidian";
 import type ForgePlugin from "../main";
 import { runExportOverview } from "../commands/export-overview";
 import { runExportOntology } from "../commands/export-ontology";
 import { installVaultForgeDocumentation } from "../docs-install/installer";
 import { loadSchema } from "../utils/schema";
+import {
+  applyForgeDeclarativeControlValue,
+  buildForgeSettingDefinitions,
+  getForgeDeclarativeControlValue,
+  type ForgeCustomDefinitionOptions,
+  type ForgeCustomSettingsSection,
+  type ForgeDeclarativeControlKey,
+  type ForgeSettingsPageId,
+} from "./settings-definitions";
 import type { ForgeSettings } from "./settings";
 
-type TabId = "general" | "lint" | "patch" | "maintenance" | "export" | "shapes";
+type TabId = ForgeSettingsPageId;
 type SettingsRenderMode = "legacy" | "declarative";
 type SettingsSummaryTone = "good" | "warning" | "critical" | "muted";
 type StringSettingKey = {
@@ -70,33 +79,23 @@ export class ForgeSettingsTab extends PluginSettingTab {
   }
 
   getSettingDefinitions(): SettingDefinitionItem[] {
-    return TABS.map(({ id, label }) => ({
-      type: "page",
-      name: label,
-      desc: this.declarativeTabDescription(id),
-      displayValue: () => this.declarativeTabDisplayValue(id),
-      status: () => this.declarativeTabStatus(id),
-      items: [
-        {
-          name: `${label} settings`,
-          desc: this.declarativeTabDescription(id),
-          aliases: this.declarativeTabAliases(id),
-          render: (setting: Setting, group: SettingGroup) => {
-            this.renderDeclarativeTab(setting, group, id);
-          },
-        },
-      ],
-    }));
+    this.settingsRenderMode = "declarative";
+    return buildForgeSettingDefinitions({
+      settings: this.plugin.settings,
+      dataviewAvailable: this.plugin.dataviewExpansionService?.isDataviewAvailable() ?? false,
+      custom: (options) => this.declarativeCustomDefinition(options),
+      pageDescription: (page) => this.declarativeTabDescription(page),
+      pageDisplayValue: (page) => this.declarativeTabDisplayValue(page),
+      pageStatus: (page) => this.declarativeTabStatus(page),
+    });
   }
 
   getControlValue(key: string): unknown {
-    const settings = this.plugin.settings as unknown as Record<string, unknown>;
-    return settings[key];
+    return getForgeDeclarativeControlValue(this.plugin.settings, key);
   }
 
   async setControlValue(key: string, value: unknown): Promise<void> {
-    const settings = this.plugin.settings as unknown as Record<string, unknown>;
-    settings[key] = value;
+    applyForgeDeclarativeControlValue(this.plugin.settings, key, value);
     await this.plugin.saveSettings();
     this.updateSettingsView();
   }
@@ -114,18 +113,6 @@ export class ForgeSettingsTab extends PluginSettingTab {
     if (typeof update === "function") {
       update.call(this);
     }
-  }
-
-  private renderDeclarativeTab(setting: Setting, _group: SettingGroup, tab: TabId): void {
-    this.settingsRenderMode = "declarative";
-    this.activeTab = tab;
-    const parentEl = setting.settingEl.parentElement ?? this.containerEl;
-    setting.settingEl.remove();
-    this.injectStyles();
-
-    const content = parentEl.createDiv({ cls: "forge-tab-content" });
-    this.renderSummaryStrip(content, this.tabSummaryItems(tab), "forge-settings-tab-summary");
-    this.renderTabContent(tab, content);
   }
 
   private declarativeTabDescription(tab: TabId): string {
@@ -170,115 +157,289 @@ export class ForgeSettingsTab extends PluginSettingTab {
     return null;
   }
 
-  private declarativeTabAliases(tab: TabId): string[] {
-    switch (tab) {
-      case "general":
-        return [
-          "install documentation",
-          "install docs",
-          "system folder",
-          "forge folder",
-          "file inventory",
-          "refresh exports with dashboard",
-          "dataview expansion",
-          "auto-update mode",
-          "auto-update delay",
-          "block title",
-          "max links",
-          "frontmatter field order",
-          "prefill from schema",
-        ];
-      case "lint":
-        return [
-          "schema note",
-          "version field location",
-          "version field",
-          "reload schema",
-          "lint reports folder",
-          "strict mode",
-          "lint run retention",
-          "lint file links",
-          "lint inline metadata",
-          "exclude inbox folder",
-          "repair prompt threshold",
-          "enable auto-lint",
-          "idle delay",
-          "stale note review",
-          "review cycle field",
-          "last updated field",
-          "in-scope field",
-          "in-scope values",
-        ];
-      case "patch":
-        return [
-          "patches folder",
-          "inbox folder",
-          "default patch file",
-          "backup before patch",
-          "backup folder",
-          "generate restore manifest",
-          "run lint after patch",
-          "run maintenance after patch",
-        ];
-      case "maintenance":
-        return [
-          "backup retention",
-          "inbox retention",
-          "inbox retention action",
-          "lint history retention",
-          "lint history max entries",
-          "auto-run on dashboard refresh",
-          "patch report retention",
-          "shape lint run retention",
-        ];
-      case "export":
-        return [
-          "enable export",
-          "exports folder",
-          "export vault overview",
-          "export ontology index",
-          "domain field",
-          "type field",
-          "status field",
-          "dashboard note name",
-          "private notes",
-          "private note field",
-          "ontology filter",
-          "filter field",
-          "filter values",
-          "relationship heading",
-          "excluded folders",
-        ];
-      case "shapes":
-        return [
-          "enable vault shape engine",
-          "shapes folder",
-          "include subfolders",
-          "type target field",
-          "created field",
-          "updated field",
-          "template field configuration",
-          "enable template refinement",
-          "templates folder",
-          "inject relationship headings",
-          "relationship parent heading",
-          "relationship heading level",
-          "relationship injection position",
-          "run refinement",
-          "enable shape heading validation",
-          "strict template matching",
-          "allow empty headings",
-          "lint scope",
-          "lint folders",
-          "enable shape repair",
-          "repair scope",
-          "repair folders",
-          "repair runs folder",
-          "repair file links",
-          "repair history retention",
-          "run shape repair",
-        ];
+  private declarativeCustomDefinition(
+    options: ForgeCustomDefinitionOptions
+  ): SettingDefinition<ForgeDeclarativeControlKey> {
+    return {
+      name: options.name,
+      desc: options.desc,
+      aliases: options.aliases,
+      visible: options.visible,
+      render: (setting: Setting) => this.renderDeclarativeCustomSection(setting, options.id),
+    };
+  }
+
+  private renderDeclarativeCustomSection(
+    setting: Setting,
+    section: ForgeCustomSettingsSection
+  ): () => void {
+    this.settingsRenderMode = "declarative";
+    this.injectStyles();
+
+    const parent = setting.settingEl.parentElement;
+    if (!parent) return () => undefined;
+
+    const anchor = setting.settingEl.nextSibling;
+    const host = setting.settingEl.createDiv();
+    this.renderDeclarativeCustomContent(section, host);
+    const nodes = Array.from(host.childNodes);
+    nodes.forEach((node) => parent.insertBefore(node, anchor));
+    setting.settingEl.remove();
+
+    return () => nodes.forEach((node) => node.remove());
+  }
+
+  private renderDeclarativeCustomContent(
+    section: ForgeCustomSettingsSection,
+    el: HTMLElement
+  ): void {
+    switch (section) {
+      case "install-docs":
+        new Setting(el)
+          .setName("Install documentation")
+          .setDesc("Writes vault-native docs into your Forge folder without replacing existing notes.")
+          .addButton((btn) =>
+            this.renderSettingsActionButton(btn, {
+              key: "install-docs",
+              label: "Install docs",
+              runningLabel: "Installing...",
+              cta: true,
+              task: () => installVaultForgeDocumentation(this.plugin.app, this.plugin.settings),
+            })
+          );
+        return;
+      case "frontmatter-field-order":
+        this.renderFrontmatterFieldOrder(el);
+        return;
+      case "schema-configuration":
+        this.renderSchemaNotePicker(el);
+        this.renderDeclarativeSchemaVersionField(el);
+        new Setting(el)
+          .setName("Reload schema")
+          .setDesc("Refresh schema-backed settings from the current schema note.")
+          .addButton((btn) =>
+            this.renderSettingsActionButton(btn, {
+              key: "lint-reload-schema",
+              label: "Reload",
+              runningLabel: "Reloading...",
+              task: async () => {
+                await this.plugin.reloadSchemaCacheForSettings();
+                new Notice("Forge: schema reloaded.");
+              },
+            })
+          );
+        return;
+      case "stale-review-fields":
+        this.renderDeclarativeStaleReviewFields(el);
+        return;
+      case "export-actions":
+        this.renderDeclarativeExportActions(el);
+        return;
+      case "export-schema-fields":
+        this.renderDeclarativeExportSchemaFields(el);
+        return;
+      case "export-filter":
+        this.renderDeclarativeExportFilter(el);
+        return;
+      case "export-exclude-folders":
+        new Setting(el)
+          .setName("Excluded folders")
+          .setDesc("Add folders to exclude from ontology indexing.");
+        this.renderFolderMultiSelect(el);
+        return;
+      case "shape-field-configuration":
+        this.renderShapeTypeTargetField(el);
+        this.renderShapeDateField(el, "Created field", "Schema date field stamped when a template is first created. Set to none to skip.", "shapeCreatedField");
+        this.renderShapeDateField(el, "Updated field", "Schema date field stamped every time a template is written. Set to none to skip.", "shapeUpdatedField");
+        this.renderShapeFieldConfigurator(el);
+        return;
+      case "shape-refinement-action":
+        new Setting(el)
+          .setName("Run refinement")
+          .setDesc("Process all shape notes and write or update template notes now.")
+          .addButton((btn) =>
+            this.renderSettingsActionButton(btn, {
+              key: "refine-shape-templates",
+              label: "Refine shape templates",
+              runningLabel: "Refining...",
+              cta: true,
+              task: async () => {
+                const { runRefineShapes } = await import("../commands/refine-shapes");
+                await runRefineShapes(this.plugin);
+              },
+            })
+          );
+        return;
+      case "shape-lint-folders":
+        this.renderShapeLintFolderMultiSelect(el);
+        return;
+      case "shape-repair-folders":
+        this.renderShapeRepairFolderMultiSelect(el);
+        return;
+      case "shape-repair-actions":
+        this.renderDeclarativeShapeRepairActions(el);
+        return;
     }
+  }
+
+  private renderDeclarativeSchemaVersionField(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    const fieldNames = s.schemaVersionLocation === "frontmatter"
+      ? this.plugin.schemaCache.getFrontmatterFieldNames()
+      : this.plugin.schemaCache.getInlineFieldNames();
+
+    this.renderSchemaFieldDropdown(
+      el,
+      "Version field",
+      `The ${s.schemaVersionLocation === "frontmatter" ? "frontmatter" : "inline"} field that holds the schema version.`,
+      fieldNames,
+      s.schemaVersionField,
+      async (value) => {
+        s.schemaVersionField = value;
+        await this.plugin.saveSettings();
+      }
+    );
+  }
+
+  private renderDeclarativeStaleReviewFields(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    const allFields = this.plugin.schemaCache.getFrontmatterFieldNames();
+
+    this.renderSchemaFieldDropdown(el, "Review cycle field", "The frontmatter field that holds the review cadence.", allFields, s.staleReviewCycleField, async (value) => {
+      s.staleReviewCycleField = value;
+      await this.plugin.saveSettings();
+    });
+    this.renderSchemaFieldDropdown(el, "Last updated field", "The frontmatter field that holds the last-updated date.", allFields, s.staleReviewUpdatedField, async (value) => {
+      s.staleReviewUpdatedField = value;
+      await this.plugin.saveSettings();
+    });
+    this.renderSchemaFieldDropdown(el, "In-scope field", "Schema field used to determine which notes are in scope for stale review.", allFields, s.staleReviewFilterField, async (value) => {
+      s.staleReviewFilterField = value;
+      s.staleReviewStatuses = [];
+      await this.plugin.saveSettings();
+      this.updateSettingsView();
+    });
+
+    if (!s.staleReviewFilterField) return;
+    const filterValues = this.plugin.schemaCache.getEnumValues(s.staleReviewFilterField);
+    if (!filterValues?.length) {
+      el.createEl("p", {
+        text: `'${s.staleReviewFilterField}' has no defined enum values in schema.`,
+        cls: "setting-item-description",
+      });
+      return;
+    }
+
+    new Setting(el).setName("In-scope values").setDesc("Choose which field values are evaluated for staleness.");
+    this.renderCheckboxGroup(el, filterValues, s.staleReviewStatuses, async (selected) => {
+      s.staleReviewStatuses = selected;
+      await this.plugin.saveSettings();
+    });
+  }
+
+  private renderDeclarativeExportActions(el: HTMLElement): void {
+    new Setting(el)
+      .setName("Export vault overview")
+      .setDesc("Build vault inventory, metadata, and overview files.")
+      .addButton((btn) => this.renderSettingsActionButton(btn, {
+        key: "export-overview",
+        label: "Run",
+        runningLabel: "Exporting...",
+        task: async () => runExportOverview(this.plugin),
+      }));
+    new Setting(el)
+      .setName("Export ontology index")
+      .setDesc("Build per-type relationship indexes using the current inventory and filter settings.")
+      .addButton((btn) => this.renderSettingsActionButton(btn, {
+        key: "export-ontology",
+        label: "Run",
+        runningLabel: "Exporting...",
+        task: async () => {
+          await runExportOntology(this.plugin);
+        },
+      }));
+  }
+
+  private renderDeclarativeExportSchemaFields(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    const fields = this.plugin.schemaCache.getFrontmatterFieldNames();
+    const addField = (name: string, desc: string, key: "exportDomainField" | "exportTypeField" | "exportStatusField" | "exportPrivateField") => {
+      this.renderSchemaFieldDropdown(el, name, desc, fields, s[key], async (value) => {
+        s[key] = value;
+        await this.plugin.saveSettings();
+        this.updateSettingsView();
+      });
+    };
+    addField("Domain field", "Frontmatter field representing the note domain. Leave blank to use the parent folder.", "exportDomainField");
+    addField("Type field", "Frontmatter field representing the note type. Leave blank to use type.", "exportTypeField");
+    addField("Status field", "Frontmatter field representing lifecycle status. Leave blank to use status.", "exportStatusField");
+    if (s.exportPrivateEnabled) {
+      addField("Private note field", "Frontmatter field that marks a note as private.", "exportPrivateField");
+    }
+  }
+
+  private renderDeclarativeExportFilter(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    new Setting(el)
+      .setName("Reload from schema")
+      .setDesc("Refresh field and value lists from the current schema.")
+      .addButton((btn) => this.renderSettingsActionButton(btn, {
+        key: "reload-schema",
+        label: "Reload",
+        runningLabel: "Reloading...",
+        task: async () => {
+          await this.plugin.schemaCache.refresh();
+          new Notice("Forge: schema reloaded.");
+        },
+      }));
+
+    const fields = this.plugin.schemaCache.getFrontmatterFieldNames();
+    this.renderSchemaFieldDropdown(el, "Filter field", "Schema field used to filter notes for ontology export.", fields, s.exportFilterField, async (value) => {
+      s.exportFilterField = value;
+      s.exportFilterValues = [];
+      await this.plugin.saveSettings();
+      this.updateSettingsView();
+    });
+
+    if (!s.exportFilterField) return;
+    const values = this.plugin.schemaCache.getEnumValues(s.exportFilterField);
+    if (!values?.length) {
+      el.createEl("p", {
+        text: `'${s.exportFilterField}' has no schema enum values.`,
+        cls: "setting-item-description",
+      });
+      return;
+    }
+    new Setting(el).setName("Filter values").setDesc("Choose values included in ontology export.");
+    this.renderCheckboxGroup(el, values, s.exportFilterValues, async (selected) => {
+      s.exportFilterValues = selected;
+      await this.plugin.saveSettings();
+    });
+  }
+
+  private renderDeclarativeShapeRepairActions(el: HTMLElement): void {
+    new Setting(el)
+      .setName("Run shape repair")
+      .setDesc("Add missing headings and reorder sections to match templates now.")
+      .addButton((btn) => this.renderSettingsActionButton(btn, {
+        key: "shape-repair-dry-run",
+        label: "Dry run",
+        runningLabel: "Running...",
+        task: async () => {
+          const { runShapeRepair } = await import("../commands/shape-repair");
+          await runShapeRepair(this.plugin, true);
+        },
+      }))
+      .addButton((btn) => this.renderSettingsActionButton(btn, {
+        key: "shape-repair",
+        label: "Run shape repair",
+        runningLabel: "Repairing...",
+        cta: true,
+        task: async () => {
+          const { runShapeRepair } = await import("../commands/shape-repair");
+          await runShapeRepair(this.plugin, false);
+        },
+      }));
   }
 
   private runAsync(task: () => Promise<void>): void {

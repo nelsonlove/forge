@@ -38,6 +38,7 @@ Forge provides maintenance and structure tooling for Obsidian vaults:
 - Bulk note update workflows
 - Vault repair tools
 - Reusable note structure validation
+- Cached Forge health views for Obsidian Bases
 - Relationship indexes
 - Vault exports
 - Maintenance workflows
@@ -155,6 +156,24 @@ After installation or updates, click **Reload plugins** from the command palette
 
 ---
 
+# Forge 3 Upgrade Notes
+
+Forge 3 requires Obsidian 1.10.0 or newer. It does not require a note or settings
+migration.
+
+After updating:
+
+1. Run **Reload plugins** from the command palette.
+2. Enable the Bases core plugin if you want to use the **Forge health** layout.
+3. Run **Refresh Forge health** once to populate clean-versus-unscanned cache data.
+
+Existing lint, Shape, and review findings remain visible before that first
+refresh. Obsidian 1.13 and newer also exposes individual Forge controls through
+native settings search; Obsidian 1.10–1.12 continues to use Forge's existing
+settings renderer.
+
+---
+
 # Quick Start
 
 ## 1. Install the Documentation
@@ -201,6 +220,7 @@ They include:
 - repair workflows
 - export documentation
 - shape systems
+- Forge Health for Bases
 - settings references
 - troubleshooting guides
 - operational examples
@@ -289,6 +309,26 @@ Forge groups findings by severity so you can prioritize structural problems incr
 ---
 
 ![Vault Lint](https://github.com/joshua-walls/forge/blob/main/assets/screenshots/vault-lint-overview.png?raw=true)
+
+---
+
+## Forge Health for Bases
+
+Forge 3 adds a **Forge health** layout to Bases.
+It maps the active Base result set to cached vault lint, Shape lint, and review
+results without writing health fields into your notes or scanning the vault when
+Base filters change.
+
+The view distinguishes errors, warnings, notes needing review, clean notes, and
+notes that were not included in the latest scan. Its options control minimum
+severity, clean and unscanned visibility, and grouping by health status.
+
+Enable the Bases core plugin, reload plugins, then choose **Forge health** from
+the Base view menu. Use **Refresh Forge health** once after upgrading so clean
+and not-scanned notes can be distinguished.
+
+Forge 3 requires Obsidian 1.10.0 or newer because it uses the Bases API as a
+first-class plugin surface.
 
 ---
 
@@ -529,6 +569,14 @@ Forge includes dedicated settings sections for:
 - Advanced operations
 
 Every setting is documented in the installed vault docs.
+
+On Obsidian 1.13 and newer, Forge exposes individual native controls to Settings
+search with inline validation where supported. Obsidian 1.10–1.12 retains the
+same settings and persistence behavior through Forge's existing renderer.
+
+When Obsidian Sync or another device changes Forge settings, Forge shows an
+explicit reload prompt in Vault Health. Choose **Reload** to apply the synced
+values to the running plugin; Forge does not silently replace active settings.
 
 ---
 

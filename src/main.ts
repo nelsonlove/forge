@@ -4,9 +4,11 @@
 import { Plugin, Notice, WorkspaceLeaf } from "obsidian";
 import {
   DEFAULT_SETTINGS,
+  hasExternalSettingsChanged,
   normalizeForgeSettings,
   normalizeInboxRetentionAction,
-  type DashboardAutoRefreshIntervalMinutes,
+  sanitizeLoadedForgeSettings,
+  settingsForPersistence,
   ForgeSettings,
 } from "./config/settings";
 import { ForgeSettingsTab } from "./config/settings-tab";
@@ -41,10 +43,14 @@ import { getVaultPaths } from "./vault/paths";
 import { DataviewExpansionService } from "./dataview/expansion-service";
 import { ActiveFileLintService } from "./linting/active-file-service";
 import { ForgeStatusBar } from "./app/status-bar";
+import {
+  FORGE_HEALTH_BASES_HOVER_SOURCE,
+  FORGE_HEALTH_BASES_VIEW,
+  ForgeHealthBasesView,
+  forgeHealthBasesOptions,
+} from "./bases/health-view";
 
 type LegacyDashboardRuntimeSettings = {
-  dashboardAutoRefreshEnabled?: boolean;
-  dashboardAutoRefreshIntervalMinutes?: DashboardAutoRefreshIntervalMinutes;
   dataviewExpansionAutoUpdateOnSave?: boolean;
   dataviewExpansionAutoUpdateMode?: ForgeSettings["dataviewExpansionAutoUpdateMode"];
 };
@@ -71,8 +77,6 @@ export default class ForgePlugin extends Plugin {
   activeFileLintService: ActiveFileLintService;
   statusBar: ForgeStatusBar | null = null;
   hasPendingExternalSettingsReload = false;
-  private lastKnownSettingsMtime = 0;
-  private readonly settingsPollIntervalMs = 5_000;
   private schemaCacheRetryTimer: number | null = null;
 
   private handleCommandError(commandId: string, error: unknown): void {
@@ -89,7 +93,6 @@ export default class ForgePlugin extends Plugin {
     const hadDataFile = await this.app.vault.adapter.exists(dataPath);
 
     await this.loadSettings();
-    await this.captureSettingsMtime();
 
     const currentVersion = this.manifest.version;
     const lastVersion = this.settings.lastInstalledVersion;
@@ -154,7 +157,21 @@ export default class ForgePlugin extends Plugin {
       (leaf: WorkspaceLeaf) => new ForgeHealthDashboardView(leaf, this)
     );
 
-    this.startSettingsSyncWatch();
+    this.registerHoverLinkSource(FORGE_HEALTH_BASES_HOVER_SOURCE, {
+      display: "Forge health",
+      defaultMod: false,
+    });
+    this.registerBasesView(FORGE_HEALTH_BASES_VIEW, {
+      name: "Forge health",
+      icon: "lucide-shield-check",
+      options: () => forgeHealthBasesOptions(),
+      factory: (controller, containerEl) => new ForgeHealthBasesView(controller, containerEl, {
+        cachePath: this.dashboardService.cachePath,
+        loadSnapshot: () => this.dashboardService.loadSnapshot(),
+        refreshHealth: () => this.refreshHealthDashboard(),
+        openDashboard: () => this.openHealthDashboard(),
+      }),
+    });
 
     // Register commands and settings tab immediately — these don't need vault access
     this.addCommand({
@@ -621,7 +638,7 @@ export default class ForgePlugin extends Plugin {
     const legacyInboxRetentionAction = rawSettings && typeof rawSettings === "object"
       ? (rawSettings as Record<string, unknown>).inboxRetentionAction
       : undefined;
-    const loaded = sanitizeLoadedSettings(rawSettings);
+    const loaded = sanitizeLoadedForgeSettings(rawSettings);
     this.settings = normalizeForgeSettings(Object.assign({}, DEFAULT_SETTINGS, loaded));
     this.settings.inboxRetentionAction = normalizeInboxRetentionAction(legacyInboxRetentionAction);
 
@@ -651,7 +668,6 @@ export default class ForgePlugin extends Plugin {
       await this.schemaCache.refresh();
     }
     this.hasPendingExternalSettingsReload = false;
-    await this.captureSettingsMtime();
 
     const leaves = this.app.workspace.getLeavesOfType(FORGE_HEALTH_DASHBOARD_VIEW);
     for (const leaf of leaves) {
@@ -668,8 +684,19 @@ export default class ForgePlugin extends Plugin {
       await this.schemaCache.refresh();
     }
     this.hasPendingExternalSettingsReload = false;
-    await this.captureSettingsMtime();
     await this.refreshDashboardViewsForSettingsChange();
+  }
+
+  async onExternalSettingsChange(): Promise<void> {
+    try {
+      const rawSettings: unknown = (await this.loadData()) ?? {};
+      if (!hasExternalSettingsChanged(rawSettings, this.settings)) return;
+
+      this.hasPendingExternalSettingsReload = true;
+      this.renderSettingsReloadBanner();
+    } catch (error) {
+      console.warn("[Forge] Could not inspect externally changed settings:", error);
+    }
   }
 
   async applyRuntimeSettingsChange(): Promise<void> {
@@ -715,43 +742,6 @@ export default class ForgePlugin extends Plugin {
     return shouldReloadSchema;
   }
 
-  private startSettingsSyncWatch(): void {
-    const settingsPath = this.getSettingsDataPath();
-
-    this.registerEvent(
-      this.app.vault.on("modify", (file) => {
-        if (file.path === settingsPath) {
-          void this.checkForExternalSettingsChange();
-        }
-      })
-    );
-
-    this.registerInterval(window.setInterval(() => {
-      void this.checkForExternalSettingsChange();
-    }, this.settingsPollIntervalMs));
-  }
-
-  private async checkForExternalSettingsChange(): Promise<void> {
-    try {
-      const stat = await this.app.vault.adapter.stat(this.getSettingsDataPath());
-      const mtime = stat?.mtime ?? 0;
-      if (mtime === 0 || mtime === this.lastKnownSettingsMtime) return;
-
-      this.lastKnownSettingsMtime = mtime;
-      const stored = sanitizeLoadedSettings((await this.loadData()) ?? {});
-      const normalizedStored = settingsForPersistence(
-        normalizeForgeSettings(Object.assign({}, DEFAULT_SETTINGS, stored))
-      );
-      const normalizedCurrent = settingsForPersistence(this.settings);
-      if (JSON.stringify(normalizedStored) === JSON.stringify(normalizedCurrent)) return;
-
-      this.hasPendingExternalSettingsReload = true;
-      this.renderSettingsReloadBanner();
-    } catch {
-      // Ignore transient sync states while the file is being written.
-    }
-  }
-
   private renderSettingsReloadBanner(): void {
     const leaves = this.app.workspace.getLeavesOfType(FORGE_HEALTH_DASHBOARD_VIEW);
     for (const leaf of leaves) {
@@ -759,19 +749,6 @@ export default class ForgePlugin extends Plugin {
         leaf.view.render();
       }
     }
-  }
-
-  private async captureSettingsMtime(): Promise<void> {
-    try {
-      const stat = await this.app.vault.adapter.stat(this.getSettingsDataPath());
-      this.lastKnownSettingsMtime = stat?.mtime ?? 0;
-    } catch {
-      this.lastKnownSettingsMtime = 0;
-    }
-  }
-
-  private getSettingsDataPath(): string {
-    return `${this.manifest.dir}/data.json`;
   }
 
   private async refreshDashboardViewsForSettingsChange(): Promise<void> {
@@ -791,26 +768,4 @@ function formatCommandName(command: string): string {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function sanitizeLoadedSettings(raw: unknown): Partial<ForgeSettings> {
-  const loaded = raw && typeof raw === "object"
-    ? { ...(raw as Record<string, unknown>) }
-    : {};
-
-  delete (loaded as LegacyDashboardRuntimeSettings).dashboardAutoRefreshEnabled;
-  delete (loaded as LegacyDashboardRuntimeSettings).dashboardAutoRefreshIntervalMinutes;
-  delete (loaded as LegacyDashboardRuntimeSettings).dataviewExpansionAutoUpdateMode;
-
-  if ("inboxRetentionAction" in loaded) {
-    loaded.inboxRetentionAction = normalizeInboxRetentionAction(loaded.inboxRetentionAction);
-  }
-
-  return loaded;
-}
-
-function settingsForPersistence(settings: ForgeSettings): Partial<ForgeSettings> {
-  const persisted = { ...settings };
-  delete (persisted as Partial<ForgeSettings>).dataviewExpansionAutoUpdateMode;
-  return persisted;
 }

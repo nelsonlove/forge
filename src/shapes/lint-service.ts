@@ -23,6 +23,7 @@ export interface ShapeLintRunEnvelope {
 
 export interface ShapeLintRunResult {
   envelope: ShapeLintRunEnvelope;
+  scannedFiles?: string[];
   results: LintResult[];
   errors: LintResult[];
   warnings: LintResult[];
@@ -98,6 +99,7 @@ export class ShapeLintService {
         schema_version: schema?.version ?? "",
         notes_scanned: candidateFiles.length,
       },
+      scannedFiles: candidateFiles.map((file) => file.path),
       results,
       errors: results.filter((r) => r.severity === "error"),
       warnings: results.filter((r) => r.severity === "warning"),

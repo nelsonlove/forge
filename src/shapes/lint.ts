@@ -33,6 +33,7 @@ export interface RunShapeLintForDocumentsInput {
 
 export interface ShapeLintRunResult {
   envelope: LintRunEnvelope;
+  scannedFiles?: string[];
   results: LintResult[];
   errors: LintResult[];
   warnings: LintResult[];
@@ -61,6 +62,7 @@ export function runShapeLintForDocuments(input: RunShapeLintForDocumentsInput): 
       schema_version: input.schemaVersion ?? "",
       notes_scanned: candidateDocuments.length,
     },
+    scannedFiles: candidateDocuments.map((document) => document.path),
     results,
     errors: results.filter((result) => result.severity === "error"),
     warnings: results.filter((result) => result.severity === "warning"),

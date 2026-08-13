@@ -75,6 +75,7 @@ export interface LintRunEnvelope {
 
 export interface LintRunResult {
   envelope: LintRunEnvelope;
+  scannedFiles?: string[];
   results: LintResult[];
   errors: LintResult[];
   warnings: LintResult[];
@@ -156,6 +157,7 @@ export function runLintForDocuments(input: RunLintForDocumentsInput): LintRunRes
 
   return {
     envelope,
+    scannedFiles: allDocuments.map((document) => document.path),
     results: allResults,
     errors:   allResults.filter((r) => r.severity === "error"),
     warnings: allResults.filter((r) => r.severity === "warning"),
