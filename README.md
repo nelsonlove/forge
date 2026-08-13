@@ -292,6 +292,22 @@ Forge groups findings by severity so you can prioritize structural problems incr
 
 ---
 
+## Forge Health for Bases
+
+Forge 3 adds a **Forge health** layout to Bases.
+It maps the active Base result set to cached vault lint, Shape lint, and review
+results without writing health fields into your notes or scanning the vault when
+Base filters change.
+
+The view distinguishes errors, warnings, notes needing review, clean notes, and
+notes that were not included in the latest scan. Its options control minimum
+severity, clean and unscanned visibility, and grouping by health status.
+
+Forge 3 requires Obsidian 1.10.0 or newer because it uses the Bases API as a
+first-class plugin surface.
+
+---
+
 ## Normalization
 
 Normalization keeps metadata formatting clean and predictable.

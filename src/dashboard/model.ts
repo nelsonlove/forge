@@ -93,6 +93,7 @@ export interface LintScanResult {
   generated_at: string;
   duration_ms: number;
   files_scanned: number;
+  scanned_file_paths?: string[];
   issues: DashboardIssue[];
   review_items: DashboardIssue[];
   errors: number;
@@ -146,6 +147,7 @@ export interface ShapeLintResult {
   generated_at: string;
   duration_ms: number;
   files_scanned: number;
+  scanned_file_paths?: string[];
   issues: DashboardIssue[];
   summary: ShapeLintSummary;
   errors: number;
@@ -396,6 +398,7 @@ export function buildLintScanResult(
     generated_at: lintRun.envelope.timestamp,
     duration_ms: durationMs,
     files_scanned: lintRun.envelope.notes_scanned,
+    scanned_file_paths: [...(lintRun.scannedFiles ?? [])],
     issues: lintRun.results.map((issue) => ({
       ...lintResultToDashboardIssue(issue),
       source_command: sourceCommand,
@@ -573,6 +576,7 @@ export function buildShapeLintResult(
     generated_at: shapeLintRun.envelope.timestamp,
     duration_ms: durationMs,
     files_scanned: shapeLintRun.envelope.notes_scanned,
+    scanned_file_paths: [...(shapeLintRun.scannedFiles ?? [])],
     issues: shapeLintRun.results.map((issue) => ({
       ...lintResultToDashboardIssue(issue),
       source_command: sourceCommand,

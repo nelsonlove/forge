@@ -1846,3 +1846,197 @@ button.forge-statusbar-menu-button:focus-visible {
     width: 100%;
   }
 }
+
+/* ── Forge Health Bases view ───────────────────────────────────────────── */
+
+.forge-bases-health-view {
+  container-type: inline-size;
+  color: var(--text-normal);
+  overflow: auto;
+  padding: var(--size-4-3);
+}
+
+.forge-bases-health-view .forge-bases-health-header {
+  align-items: flex-start;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: flex;
+  gap: var(--size-4-3);
+  justify-content: space-between;
+  padding-bottom: var(--size-4-3);
+}
+
+.forge-bases-health-view .forge-bases-health-title h3 {
+  margin: 0;
+}
+
+.forge-bases-health-view .forge-bases-health-cache-state {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-top: var(--size-2-1);
+}
+
+.forge-bases-health-view .forge-bases-health-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-2);
+  justify-content: flex-end;
+}
+
+.forge-bases-health-view .forge-bases-health-actions button {
+  min-height: var(--input-height);
+}
+
+.forge-bases-health-view .forge-bases-health-empty {
+  color: var(--text-muted);
+  padding: var(--size-4-6) 0;
+  text-align: center;
+}
+
+.forge-bases-health-view .forge-bases-health-group {
+  margin-top: var(--size-4-5);
+}
+
+.forge-bases-health-view .forge-bases-health-group-heading {
+  align-items: center;
+  display: flex;
+  font-weight: var(--font-semibold);
+  gap: var(--size-2-2);
+  margin-bottom: var(--size-2-2);
+}
+
+.forge-bases-health-view .forge-bases-health-count {
+  background: var(--background-secondary);
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  padding: var(--size-2-1) var(--size-2-2);
+}
+
+.forge-bases-health-view .forge-bases-health-table {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  min-width: 58rem;
+  overflow: hidden;
+}
+
+.forge-bases-health-view .forge-bases-health-row {
+  align-items: center;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: grid;
+  gap: var(--size-4-2);
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(12rem, 1.4fr) repeat(3, minmax(5rem, 0.5fr)) minmax(12rem, 1.2fr) minmax(10rem, 0.8fr);
+  min-height: var(--input-height);
+  padding: var(--size-2-3) var(--size-4-3);
+}
+
+.forge-bases-health-view .forge-bases-health-row:not(.forge-bases-health-row-header) {
+  contain-intrinsic-block-size: var(--input-height);
+  content-visibility: auto;
+}
+
+.forge-bases-health-view .forge-bases-health-row:last-child {
+  border-bottom: 0;
+}
+
+.forge-bases-health-view .forge-bases-health-row-header {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+}
+
+.forge-bases-health-view .forge-bases-health-status {
+  align-items: center;
+  display: flex;
+  gap: var(--size-2-2);
+}
+
+.forge-bases-health-view .forge-bases-health-status-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.forge-bases-health-view .forge-bases-health-status-errors {
+  color: var(--text-error);
+}
+
+.forge-bases-health-view .forge-bases-health-status-warnings {
+  color: var(--text-warning);
+}
+
+.forge-bases-health-view .forge-bases-health-status-needs_review {
+  color: var(--text-accent);
+}
+
+.forge-bases-health-view .forge-bases-health-status-clean {
+  color: var(--text-success);
+}
+
+.forge-bases-health-view .forge-bases-health-muted {
+  color: var(--text-muted);
+}
+
+.forge-bases-health-view .forge-bases-health-file {
+  overflow-wrap: anywhere;
+}
+
+.forge-bases-health-view .forge-bases-health-number {
+  font-variant-numeric: tabular-nums;
+}
+
+.forge-bases-health-view .forge-bases-health-detail {
+  font-size: var(--font-ui-small);
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 700px) {
+  .forge-bases-health-view .forge-bases-health-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .forge-bases-health-view .forge-bases-health-actions {
+    justify-content: flex-start;
+  }
+
+  .forge-bases-health-view .forge-bases-health-table {
+    min-width: 0;
+  }
+
+  .forge-bases-health-view .forge-bases-health-row-header {
+    display: none;
+  }
+
+  .forge-bases-health-view .forge-bases-health-row {
+    align-items: start;
+    gap: var(--size-2-2);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: var(--size-4-3);
+  }
+
+  .forge-bases-health-view .forge-bases-health-status {
+    grid-column: 1;
+  }
+
+  .forge-bases-health-view .forge-bases-health-file {
+    grid-column: 2 / 4;
+  }
+
+  .forge-bases-health-view .forge-bases-health-number::before {
+    color: var(--text-faint);
+    content: attr(data-label);
+    display: block;
+    font-size: var(--font-ui-smaller);
+  }
+
+  .forge-bases-health-view .forge-bases-health-detail {
+    grid-column: 1 / 4;
+  }
+
+  .forge-bases-health-view .forge-bases-health-detail::before {
+    color: var(--text-faint);
+    content: attr(data-label);
+    display: block;
+    font-size: var(--font-ui-smaller);
+  }
+}

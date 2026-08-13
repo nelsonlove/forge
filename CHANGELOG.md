@@ -1,3 +1,31 @@
+# 3.0.0
+
+## Added
+
+- Added a read-only **Forge health** layout for Obsidian Bases.
+- Added cached health grouping for errors, warnings, notes needing review, clean notes, and notes not included in the latest scan.
+- Added Bases view controls for minimum severity, clean and unscanned visibility, and grouping by health status.
+- Added native file opening, modifier-click, and hover-preview behavior to Forge health rows.
+- Added an installed workflow guide for the Forge Health Bases view.
+
+## Changed
+
+- Raised `minAppVersion` to `1.10.0` and the Forge major version to `3.0.0` because Bases is now a first-class plugin surface.
+- Registered the Bases view directly against the guaranteed Obsidian 1.10 API.
+- Extended cached lint and Shape results with scanned file paths so clean and unscanned notes can be distinguished without writing health metadata into notes.
+- Kept Base query updates read-only and cache-backed; changing Base filters or properties does not start a vault scan.
+- Replaced settings-file polling with Obsidian's native external-settings callback.
+- Added native declarative settings controls and settings search support on Obsidian 1.13+, with the existing renderer retained for Obsidian 1.10–1.12.
+
+## Compatibility
+
+- Forge 3 requires Obsidian `1.10.0` or newer.
+- The Bases core plugin must be enabled for the Forge health layout to appear.
+- No note or settings migration is required.
+- Refresh Forge health once after upgrading to populate clean-versus-unscanned cache data; findings from older caches remain visible.
+
+---
+
 # 2.0.5
 
 ## Fixed

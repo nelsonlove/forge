@@ -43,6 +43,12 @@ import { getVaultPaths } from "./vault/paths";
 import { DataviewExpansionService } from "./dataview/expansion-service";
 import { ActiveFileLintService } from "./linting/active-file-service";
 import { ForgeStatusBar } from "./app/status-bar";
+import {
+  FORGE_HEALTH_BASES_HOVER_SOURCE,
+  FORGE_HEALTH_BASES_VIEW,
+  ForgeHealthBasesView,
+  forgeHealthBasesOptions,
+} from "./bases/health-view";
 
 type LegacyDashboardRuntimeSettings = {
   dataviewExpansionAutoUpdateOnSave?: boolean;
@@ -150,6 +156,22 @@ export default class ForgePlugin extends Plugin {
       FORGE_HEALTH_DASHBOARD_VIEW,
       (leaf: WorkspaceLeaf) => new ForgeHealthDashboardView(leaf, this)
     );
+
+    this.registerHoverLinkSource(FORGE_HEALTH_BASES_HOVER_SOURCE, {
+      display: "Forge health",
+      defaultMod: false,
+    });
+    this.registerBasesView(FORGE_HEALTH_BASES_VIEW, {
+      name: "Forge health",
+      icon: "lucide-shield-check",
+      options: () => forgeHealthBasesOptions(),
+      factory: (controller, containerEl) => new ForgeHealthBasesView(controller, containerEl, {
+        cachePath: this.dashboardService.cachePath,
+        loadSnapshot: () => this.dashboardService.loadSnapshot(),
+        refreshHealth: () => this.refreshHealthDashboard(),
+        openDashboard: () => this.openHealthDashboard(),
+      }),
+    });
 
     // Register commands and settings tab immediately — these don't need vault access
     this.addCommand({
