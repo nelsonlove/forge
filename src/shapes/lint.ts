@@ -126,7 +126,11 @@ export function collectShapeNamesFromDocuments(
     const path = normalisePath(document.path);
     if (document.extension.toLowerCase() !== "md" || !path.startsWith(folderPrefix)) continue;
 
-    const shape = document.basename.trim();
+    // The name is the path under the shapes folder, not just the file name. This
+    // lets shapes be namespaced — `Shapes/Task/Project.md` is `Task/Project` — so a
+    // note whose type value is namespaced can match, and two shapes with the same
+    // file name in different folders no longer collide.
+    const shape = path.slice(folderPrefix.length).replace(/\.md$/i, "").trim();
     const key = shape.toLowerCase();
     if (!shape || seen.has(key)) continue;
 
@@ -269,6 +273,35 @@ interface DocSection {
   children: DocSection[];
 }
 
+/**
+ * Does a document heading satisfy a template heading?
+ *
+ * Exact text, case-insensitively — except that a template heading may contain
+ * placeholders, `{{...}}`, which stand for text that differs per note. A heading a
+ * template plugin fills in with the note's own title can then be required without
+ * demanding that every note repeat the same words.
+ *
+ * `# {{TITLE}}` matches any level-1 heading; `## Log for {{DATE}}` matches
+ * `## Log for 2026-08-15`. A template heading with no placeholder is compared
+ * exactly as before.
+ */
+export function headingTextMatches(templateText: string, documentText: string): boolean {
+  const template = templateText.trim();
+  const doc = documentText.trim();
+  if (!/\{\{[^}]*\}\}/.test(template)) {
+    return template.toLowerCase() === doc.toLowerCase();
+  }
+  // Escape everything that is not a placeholder, then let each placeholder stand
+  // for any non-empty run of text.
+  const pattern = template
+    .split(/(\{\{[^}]*\}\})/)
+    .map((part) => (/^\{\{[^}]*\}\}$/.test(part)
+      ? ".+"
+      : part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+  return new RegExp(`^${pattern}$`, "i").test(doc);
+}
+
 function lintLevel(
   templateNodes: TemplateNode[],
   docSections: DocSection[],
@@ -287,7 +320,7 @@ function lintLevel(
     const match = docSections.find(
       (section) =>
         !consumed.has(section) &&
-        section.headingText.toLowerCase() === templateNode.text.toLowerCase() &&
+        headingTextMatches(templateNode.text, section.headingText) &&
         section.headingLevel === templateNode.level
     );
 
