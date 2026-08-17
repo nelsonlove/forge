@@ -15,6 +15,7 @@
 import { Notice, TFile, TFolder } from "obsidian";
 import type ForgePlugin from "../main";
 import { getVaultPaths } from "../vault/paths";
+import { NAMESPACE_SEPARATOR } from "../shapes/lint";
 import { readNote } from "../utils/frontmatter";
 import { ensureFolder, localTimestamp, todayString } from "../utils/files";
 import { VaultSchema, SchemaRelationship } from "../utils/schema";
@@ -141,7 +142,10 @@ async function processShape(
   dryRun: boolean
 ): Promise<RefinementResult> {
   const { app, settings } = plugin;
-  const shapeName = shapeFile.basename;
+  // The name is the path under the shapes folder, matching how lint collects shapes.
+  // Taking the basename here would flatten a namespaced shape back to its last
+  // segment, so `Task/Project` would write a template claiming to be `Project`.
+  const shapeName = shapeNameFromPath(shapeFile.path, getVaultPaths(settings).shapes);
 
   const templateFileName = shapeToTemplateName(shapeName);
   const templatePath = `${templatesFolder}/${templateFileName}`;
@@ -479,8 +483,19 @@ function promoteHeadings(content: string): string {
 
 // ── Name derivation ───────────────────────────────────────────────────────────
 
+/** The shape's name: its path under the shapes folder, minus the extension. */
+export function shapeNameFromPath(filePath: string, shapesFolder: string): string {
+  const folder = shapesFolder.replace(/\/+$/, "");
+  const path = filePath.startsWith(`${folder}/`) ? filePath.slice(folder.length + 1) : filePath;
+  return path.replace(/\.md$/i, "").trim();
+}
+
 function shapeToTemplateName(shapeName: string): string {
-  const title = shapeName
+  // A namespace cannot be a subfolder here: the reverse lookup reads the basename, so
+  // the separator has to survive inside the file name. NAMESPACE_SEPARATOR is a
+  // character the filesystem allows and a shape name will not contain.
+  const flat = shapeName.split("/").join(NAMESPACE_SEPARATOR);
+  const title = flat
     .split(/[-_ ]+/)
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())

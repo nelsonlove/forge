@@ -261,8 +261,23 @@ export function extractHeadings(content: string): ParsedHeading[] {
   return headings;
 }
 
+/**
+ * The separator standing in for `/` inside a template's file name.
+ *
+ * A namespaced shape cannot put its namespace in a subfolder, because a template is
+ * found by its base name — the folder would be dropped and two namespaces would
+ * collide again. This character is legal in a file name on every platform Obsidian
+ * runs on, and is not one a shape name contains.
+ */
+export const NAMESPACE_SEPARATOR = "~";
+
 export function templateFileToShapeName(basename: string): string {
-  return basename.replace(/^Template,\s*/i, "").trim().toLowerCase();
+  return basename
+    .replace(/^Template,\s*/i, "")
+    .split(NAMESPACE_SEPARATOR)
+    .join("/")
+    .trim()
+    .toLowerCase();
 }
 
 interface DocSection {
