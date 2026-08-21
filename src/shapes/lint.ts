@@ -161,17 +161,31 @@ export function collectShapeNamesFromDocuments(
 export function lintShapeHeadingsForDocument(
   document: ForgeDocument,
   settings: ForgeSettings,
-  headingCache: Map<string, ParsedHeading[]>
+  headingCache: Map<string, ParsedHeading[]>,
+  /**
+   * The shapes this note must satisfy, when something else already knows.
+   *
+   * Passed by the Fileclass source, where a note's classes are resolved by the
+   * Fileclass plugin — which binds by tag, path, bookmark or base view as well as by
+   * a frontmatter field, and can bind a note to more than one class at once. When
+   * absent the original behaviour applies: one string, one field.
+   */
+  shapeNames?: string[]
 ): LintResult[] {
   const results: LintResult[] = [];
   const strict = settings.lintStrictMode;
   const flagExtraHeadings = settings.shapeLintStrictMode;
   const allowEmptySections = settings.shapeLintAllowEmptySections;
 
-  if (!document.hasFrontmatter) return results;
-
-  const typeValue = document.frontmatter[settings.shapeTypeTargetField];
-  if (!typeValue || typeof typeValue !== "string") return results;
+  let names: string[];
+  if (shapeNames && shapeNames.length > 0) {
+    names = shapeNames;
+  } else {
+    if (!document.hasFrontmatter) return results;
+    const typeValue = document.frontmatter[settings.shapeTypeTargetField];
+    if (!typeValue || typeof typeValue !== "string") return results;
+    names = [typeValue];
+  }
 
   if (settings.shapeLintScope === "folder") {
     const folders = settings.shapeLintFolders ?? [];
@@ -181,28 +195,33 @@ export function lintShapeHeadingsForDocument(
     }
   }
 
-  const shapeName = typeValue.trim().toLowerCase();
-  const templateHeadings = headingCache.get(shapeName);
-  if (!templateHeadings || templateHeadings.length === 0) return results;
-
   const lines = document.content.split("\n");
   const { bodyLines, bodyStartLineIndex } = splitFrontmatter(lines);
-  const templateRoots = buildTemplateTree(templateHeadings);
   const { roots: docRoots } = buildDocSectionTree(bodyLines, bodyStartLineIndex);
   const documentRange = rangeForLine(lines, 0);
 
-  lintLevel(
-    templateRoots,
-    docRoots,
-    document.path,
-    typeValue,
-    strict,
-    flagExtraHeadings,
-    allowEmptySections,
-    results,
-    null,
-    documentRange
-  );
+  // A note may hold several classes at once, so each contributes its own structure.
+  for (const rawName of names) {
+    const typeValue = rawName;
+    const shapeName = rawName.trim().toLowerCase();
+    const templateHeadings = headingCache.get(shapeName);
+    if (!templateHeadings || templateHeadings.length === 0) continue;
+
+    const templateRoots = buildTemplateTree(templateHeadings);
+
+    lintLevel(
+      templateRoots,
+      docRoots,
+      document.path,
+      typeValue,
+      strict,
+      flagExtraHeadings,
+      allowEmptySections,
+      results,
+      null,
+      documentRange
+    );
+  }
 
   return results;
 }

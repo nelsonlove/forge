@@ -7,6 +7,8 @@ import {
   type ShapeLintResult,
 } from "../dashboard/types";
 import { buildShapeLintExemptList } from "../vault/paths";
+import { classesForFile, buildClassTemplates, isFileclassAvailable } from "../fileclass/adapter";
+import { buildShapeHeadingCacheFromTemplates } from "./lint";
 import { getMarkdownFiles, isExempt, isMarkdownFile, localTimestamp } from "../utils/files";
 import { loadSchema } from "../utils/schema";
 import {
@@ -73,9 +75,18 @@ export class ShapeLintService {
     );
 
     const shapeLintActive = this.settings.shapesEnabled && this.settings.shapeLintEnabled;
-    const headingCache: Map<string, import("../commands/shape-lint").ParsedHeading[]> = shapeLintActive
-      ? await buildShapeHeadingCache(this.app, this.settings)
-      : new Map<string, import("../commands/shape-lint").ParsedHeading[]>();
+
+    // With Fileclass as the source, a class definition *is* the expected structure:
+    // no shape notes, no generated templates, and nothing to keep in step. A note's
+    // classes come from Fileclass's own resolver, so a note bound by a tag or a path
+    // is checked exactly like one that names its class in frontmatter.
+    const useFileclass = this.settings.shapeSourceFileclass && isFileclassAvailable(this.app);
+
+    const headingCache: Map<string, import("../commands/shape-lint").ParsedHeading[]> = !shapeLintActive
+      ? new Map<string, import("../commands/shape-lint").ParsedHeading[]>()
+      : useFileclass
+        ? buildShapeHeadingCacheFromTemplates(await buildClassTemplates(this.app))
+        : await buildShapeHeadingCache(this.app, this.settings);
 
     const results: LintResult[] = [];
 
@@ -87,7 +98,8 @@ export class ShapeLintService {
           file,
           content,
           this.settings,
-          headingCache
+          headingCache,
+          useFileclass ? classesForFile(this.app, file) : undefined
         ));
       }
     }
