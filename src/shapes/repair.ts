@@ -376,6 +376,10 @@ function repairLevel(
   const matchedSections = new Map<TemplateNode, DocSection>();
 
   for (const templateNode of templateNodes) {
+    // Must use the same matcher the lint does. Comparing raw text here would fail to
+    // recognise a heading a placeholder legitimately matched, and repair *inserts* what
+    // it thinks is missing — so a template holding `# {{TITLE}}` would write that
+    // literal text into every note instead of leaving the real title alone.
     const match = docSections.find(
       (section) =>
         !consumed.has(section) &&

@@ -18,6 +18,7 @@ import {
   TFile,
   TFolder,
 } from "obsidian";
+import { isFileclassAvailable } from "../fileclass/adapter";
 import type { SettingDefinition, SettingDefinitionItem } from "obsidian";
 import type ForgePlugin from "../main";
 import { runExportOverview } from "../commands/export-overview";
@@ -248,6 +249,7 @@ export class ForgeSettingsTab extends PluginSettingTab {
         this.renderFolderMultiSelect(el);
         return;
       case "shape-field-configuration":
+        this.renderShapeSourceFileclass(el);
         this.renderShapeTypeTargetField(el);
         this.renderShapeDateField(el, "Created field", "Schema date field stamped when a template is first created. Set to none to skip.", "shapeCreatedField");
         this.renderShapeDateField(el, "Updated field", "Schema date field stamped every time a template is written. Set to none to skip.", "shapeUpdatedField");
@@ -2555,8 +2557,36 @@ export class ForgeSettingsTab extends PluginSettingTab {
     }
   }
 
+  private renderShapeSourceFileclass(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    const available = isFileclassAvailable(this.app);
+
+    new Setting(el)
+      .setName("Use Fileclass as the source")
+      .setDesc(
+        available
+          ? "Read a note's classes from the Fileclass plugin instead of one frontmatter field. "
+            + "Fileclass binds by tag, path, bookmark group and base view as well as by a field, "
+            + "and a note may hold several classes at once. A class definition's own body becomes "
+            + "the expected structure, so no shape notes or generated templates are needed."
+          : "Requires the Fileclass plugin, which is not installed or not enabled."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(s.shapeSourceFileclass && available)
+          .setDisabled(!available)
+          .onChange(async (value) => {
+            s.shapeSourceFileclass = value;
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      );
+  }
+
   private renderShapeTypeTargetField(el: HTMLElement): void {
     const s = this.plugin.settings;
+    // The field only decides anything when Fileclass is not the source.
+    if (s.shapeSourceFileclass && isFileclassAvailable(this.app)) return;
 
     new Setting(el)
       .setName("Type target field")

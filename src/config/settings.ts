@@ -113,6 +113,15 @@ export interface ForgeSettings {
   shapeRefinementEnabled: boolean;
   shapeTemplatesFolder: string;
   shapeTypeTargetField: string;      // frontmatter dropdown
+  /**
+   * Read a note's classes from the Fileclass plugin rather than one frontmatter field.
+   *
+   * Fileclass binds a note by tag, path, bookmark group or base view as well as by a
+   * field, and a note may hold several classes at once — none of which a single string
+   * in a single field can express. With this on, a class definition's own body is the
+   * expected structure, so no shape notes or generated templates are involved.
+   */
+  shapeSourceFileclass: boolean;
   shapeCreatedField: string;         // frontmatter dropdown
   shapeUpdatedField: string;         // frontmatter dropdown
   shapeTemplateFields: Record<string, { include: boolean; value: unknown }>;
@@ -230,6 +239,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   shapeRefinementEnabled: false,
   shapeTemplatesFolder: "System/Templates",
   shapeTypeTargetField: "type",
+  shapeSourceFileclass: false,
   shapeCreatedField: "created",
   shapeUpdatedField: "updated",
   shapeTemplateFields: {},
@@ -367,6 +377,7 @@ export function normalizeForgeSettings(settings: ForgeSettings): ForgeSettings {
       DEFAULT_SETTINGS.shapeTemplatesFolder
     ),
     shapeTypeTargetField: normalizeSettingString(settings.shapeTypeTargetField, DEFAULT_SETTINGS.shapeTypeTargetField),
+    shapeSourceFileclass: settings.shapeSourceFileclass ?? DEFAULT_SETTINGS.shapeSourceFileclass,
     shapeCreatedField: normalizeSettingString(settings.shapeCreatedField, DEFAULT_SETTINGS.shapeCreatedField),
     shapeUpdatedField: normalizeSettingString(settings.shapeUpdatedField, DEFAULT_SETTINGS.shapeUpdatedField),
     shapeRelationshipHeading: normalizeSettingString(
