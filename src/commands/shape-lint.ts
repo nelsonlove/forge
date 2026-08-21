@@ -63,7 +63,8 @@ export async function lintShapeHeadings(
   file: TFile,
   content: string,
   settings: ForgeSettings,
-  headingCache: Map<string, ParsedHeading[]>
+  headingCache: Map<string, ParsedHeading[]>,
+  shapeNames?: string[]
 ): Promise<LintResult[]> {
   const document = createForgeDocument({
     path: file.path,
@@ -75,5 +76,5 @@ export async function lintShapeHeadings(
     },
   });
 
-  return lintShapeHeadingsForDocument(document, settings, headingCache);
+  return lintShapeHeadingsForDocument(document, settings, headingCache, shapeNames);
 }

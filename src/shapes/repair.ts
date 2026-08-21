@@ -1,3 +1,4 @@
+import { headingTextMatches } from "./lint";
 import type { ForgeDocument } from "../linting/model.js";
 import { getVaultPaths, localTimestamp, normalisePath, todayString } from "../vault/paths.js";
 import type { ForgeSettings } from "../config/settings.js";
@@ -374,10 +375,14 @@ function repairLevel(
   const consumed = new Set<DocSection>();
 
   for (const templateNode of templateNodes) {
+    // Must use the same matcher the lint does. Comparing raw text here would fail to
+    // recognise a heading a placeholder legitimately matched, and repair *inserts* what
+    // it thinks is missing — so a template holding `# {{TITLE}}` would write that
+    // literal text into every note instead of leaving the real title alone.
     const match = docSections.find(
       (section) =>
         !consumed.has(section) &&
-        section.headingText.toLowerCase() === templateNode.text.toLowerCase() &&
+        headingTextMatches(templateNode.text, section.headingText) &&
         section.headingLevel === templateNode.level
     );
 
