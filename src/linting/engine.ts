@@ -17,6 +17,7 @@ import {
   type LintSeverity,
 } from "./model";
 import type { ForgeSettings } from "../config/settings";
+import { classesForFile, isFileclassAvailable } from "../fileclass/adapter";
 import { getVaultPaths } from "../vault/paths";
 import { loadSchema } from "../utils/schema";
 import { getMarkdownFiles, isMarkdownFile } from "../utils/files";
@@ -70,7 +71,24 @@ export async function runLintForFiles(
       settings.shapeIncludeSubfolders
     ),
     vaultPath: (app.vault.adapter as VaultAdapterWithBasePath).basePath ?? "",
+    classesByPath: resolveClassesByPath(app, settings, files),
   });
+}
+
+/**
+ * Resolved classes per file for class-conditioned lint rules, or undefined
+ * when the feature is off or the Fileclass plugin is absent. Every linted
+ * file gets an entry — an empty one is authoritative ("this note has no
+ * classes"), so a dead fileClass key does not drive conditions the index
+ * itself would not.
+ */
+function resolveClassesByPath(
+  app: App,
+  settings: ForgeSettings,
+  files: TFile[]
+): Map<string, string[]> | undefined {
+  if (!settings.conditionSourceFileclass || !isFileclassAvailable(app)) return undefined;
+  return new Map(files.filter(isMarkdownFile).map((file) => [file.path, classesForFile(app, file)]));
 }
 
 async function filesToForgeDocuments(app: App, files: TFile[]): Promise<ForgeDocument[]> {
