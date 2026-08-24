@@ -104,6 +104,14 @@ export interface RunLintForDocumentsInput {
   vaultPath?: string;
   timestamp?: string;
   now?: number;
+  /**
+   * Resolved classes per document path, from the Fileclass plugin index.
+   * When a path has an entry, it is authoritative for rules conditioned on
+   * the class field — the raw `fileClass` frontmatter key is not consulted —
+   * so tag-, path- and bookmark-bound notes condition exactly like
+   * field-bound ones. Matching against these values is case-insensitive.
+   */
+  classesByPath?: Map<string, string[]>;
 }
 
 export function lintResultToDashboardIssue(result: LintResult): DashboardIssue {
@@ -134,7 +142,7 @@ export function runLintForDocuments(input: RunLintForDocumentsInput): LintRunRes
   const allResults: LintResult[] = [];
 
   for (const document of allDocuments) {
-    allResults.push(...lintDocument(document, schema, validShapes, settings, paths.shapes));
+    allResults.push(...lintDocument(document, schema, validShapes, settings, paths.shapes, input.classesByPath?.get(document.path)));
   }
 
   allResults.push(...testUniqueFields(allDocuments, schema));
@@ -211,7 +219,8 @@ function lintDocument(
   schema: VaultSchema,
   validShapes: string[],
   settings: ForgeSettings,
-  shapesPath: string
+  shapesPath: string,
+  resolvedClasses?: string[]
 ): LintResult[] {
   const results: LintResult[] = [];
   const ranges = buildDocumentRangeIndex(document.content);
@@ -229,7 +238,7 @@ function lintDocument(
   results.push(...testEnumFields(document.path, fm, schema.frontmatter.required, ranges));
   results.push(...testDateFields(document.path, fm, schema.frontmatter.required, ranges));
   results.push(...testSchemaPatternFields(document.path, fm, schema.frontmatter.required, ranges));
-  results.push(...testConditionalRules(document.path, fm, schema.frontmatter.required, ranges));
+  results.push(...testConditionalRules(document.path, fm, schema.frontmatter.required, ranges, resolvedClasses));
   results.push(...testFieldTagConsistency(document.path, fm, schema.frontmatter.required, ranges));
 
   // Optional frontmatter fields — validate only if present
@@ -238,7 +247,9 @@ function lintDocument(
   results.push(...testEnumFields(document.path, fm, optFields, ranges));
   results.push(...testDateFields(document.path, fm, optFields, ranges));
   results.push(...testSchemaPatternFields(document.path, fm, optFields, ranges));
-  results.push(...testConditionalRules(document.path, fm, optFields, ranges));
+  // Conditional rules run over every optional field, not just present ones —
+  // required_when exists precisely to flag a field that is absent.
+  results.push(...testConditionalRules(document.path, fm, schema.frontmatter.optional, ranges, resolvedClasses));
   results.push(...testPatternFieldValues(document.path, fm, optFields, validShapes, ranges, shapesPath));
 
   // Tag namespace rules
@@ -472,11 +483,41 @@ function frontmatterPatternValueToString(value: unknown): string {
     : "";
 }
 
+/** The frontmatter key the Fileclass plugin binds classes through. */
+const CLASS_FIELD = "fileClass";
+
+/**
+ * Values a conditional rule's driver field holds for this note, one entry per
+ * value. Resolved classes are authoritative for the class field when supplied;
+ * otherwise a list-valued field contributes every element, so a note with
+ * `fileClass: [Area, Task]` matches a rule on `Task`. Null means the driver is
+ * absent entirely and the rule does not apply.
+ */
+function conditionDriverValues(
+  fm: Record<string, unknown>,
+  driverField: string,
+  resolvedClasses: string[] | undefined
+): { values: string[]; caseInsensitive: boolean } | null {
+  if (driverField === CLASS_FIELD && resolvedClasses !== undefined) {
+    return { values: resolvedClasses.map(String), caseInsensitive: true };
+  }
+  if (!isFieldPresent(fm, driverField)) return null;
+  const raw = fm[driverField];
+  return { values: Array.isArray(raw) ? raw.map(String) : [String(raw)], caseInsensitive: false };
+}
+
+function matchingDriverValues(driver: { values: string[]; caseInsensitive: boolean }, wanted: string[]): string[] {
+  if (!driver.caseInsensitive) return driver.values.filter((value) => wanted.includes(value));
+  const wantedLower = wanted.map((value) => value.toLowerCase());
+  return driver.values.filter((value) => wantedLower.includes(value.toLowerCase()));
+}
+
 function testConditionalRules(
   path: string,
   fm: Record<string, unknown>,
   fields: SchemaField[],
-  ranges: DocumentRangeIndex
+  ranges: DocumentRangeIndex,
+  resolvedClasses?: string[]
 ): LintResult[] {
   const results: LintResult[] = [];
 
@@ -486,30 +527,29 @@ function testConditionalRules(
 
     for (const rule of field.lint_rules) {
       if (!rule.field) continue;
-      if (!isFieldPresent(fm, rule.field)) continue;
+      const driver = conditionDriverValues(fm, rule.field, resolvedClasses);
+      if (!driver) continue;
 
-      const driverVal = String(fm[rule.field]);
       const severity = rule.severity ?? "warning";
+      const equalsMatches = rule.equals ? matchingDriverValues(driver, rule.equals) : [];
 
       if (rule.rule === "required_when") {
-        const matchEquals = rule.equals?.includes(driverVal) ?? false;
-        if (matchEquals && !fieldPresent) {
+        if (equalsMatches.length > 0 && !fieldPresent) {
           results.push(newResult(path, severity, "required_when",
-            `Field '${field.name}' is required when '${rule.field}' = '${driverVal}'`,
+            `Field '${field.name}' is required when '${rule.field}' = '${equalsMatches[0]}'`,
             rangeForField(ranges, rule.field)));
         }
       }
 
       if (rule.rule === "forbidden_when") {
         const matchNotEquals = rule.not_equals
-          ? !rule.not_equals.includes(driverVal)
+          ? matchingDriverValues(driver, rule.not_equals).length === 0
           : false;
-        const matchEquals = rule.equals?.includes(driverVal) ?? false;
 
-        if ((matchNotEquals || matchEquals) && fieldPresent) {
+        if ((matchNotEquals || equalsMatches.length > 0) && fieldPresent) {
           const label = rule.not_equals
             ? `not one of: ${rule.not_equals.join(", ")}`
-            : `= '${driverVal}'`;
+            : `= '${equalsMatches[0]}'`;
           results.push(newResult(path, severity, "forbidden_when",
             `Field '${field.name}' should not be present when '${rule.field}' is ${label}`,
             rangeForField(ranges, field.name)));

@@ -122,6 +122,14 @@ export interface ForgeSettings {
    * expected structure, so no shape notes or generated templates are involved.
    */
   shapeSourceFileclass: boolean;
+  /**
+   * Resolve class-conditioned frontmatter lint rules (required_when /
+   * forbidden_when on the fileClass field) through the Fileclass plugin index
+   * instead of the raw frontmatter key. Binding route stops mattering: a note
+   * bound by tag, path or bookmark conditions exactly like one naming its
+   * class in frontmatter, and multi-class notes match on every class.
+   */
+  conditionSourceFileclass: boolean;
   shapeCreatedField: string;         // frontmatter dropdown
   shapeUpdatedField: string;         // frontmatter dropdown
   shapeTemplateFields: Record<string, { include: boolean; value: unknown }>;
@@ -240,6 +248,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   shapeTemplatesFolder: "System/Templates",
   shapeTypeTargetField: "type",
   shapeSourceFileclass: false,
+  conditionSourceFileclass: false,
   shapeCreatedField: "created",
   shapeUpdatedField: "updated",
   shapeTemplateFields: {},
@@ -378,6 +387,7 @@ export function normalizeForgeSettings(settings: ForgeSettings): ForgeSettings {
     ),
     shapeTypeTargetField: normalizeSettingString(settings.shapeTypeTargetField, DEFAULT_SETTINGS.shapeTypeTargetField),
     shapeSourceFileclass: settings.shapeSourceFileclass ?? DEFAULT_SETTINGS.shapeSourceFileclass,
+    conditionSourceFileclass: settings.conditionSourceFileclass ?? DEFAULT_SETTINGS.conditionSourceFileclass,
     shapeCreatedField: normalizeSettingString(settings.shapeCreatedField, DEFAULT_SETTINGS.shapeCreatedField),
     shapeUpdatedField: normalizeSettingString(settings.shapeUpdatedField, DEFAULT_SETTINGS.shapeUpdatedField),
     shapeRelationshipHeading: normalizeSettingString(

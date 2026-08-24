@@ -57,7 +57,7 @@ describe("declarative settings definitions", () => {
       "dataviewExpansionEnabled", "dataviewExpansionAutoUpdateMode", "dataviewExpansionAutoUpdateDelaySeconds",
       "dataviewExpansionTitle", "dataviewExpansionMaxLinks",
       "schemaVersionLocation", "lintRunsFolder", "lintStrictMode", "lintRunRetentionCount", "lintFileLinks",
-      "lintInlineMetadata", "lintExcludeInboxFolder", "lintRepairThreshold", "activeFileLintEnabled",
+      "lintInlineMetadata", "conditionSourceFileclass", "lintExcludeInboxFolder", "lintRepairThreshold", "activeFileLintEnabled",
       "activeFileLintIdleDelaySeconds", "staleReviewEnabled",
       "patchesFolder", "inboxFolder", "patchDefaultFile", "patchBackupEnabled", "patchBackupFolder",
       "patchGenerateManifest", "patchAutoLintAfterApply", "patchAutoMaintenanceAfterApply",

@@ -216,6 +216,11 @@ function buildLint(context: ForgeSettingsDefinitionContext): SettingDefinitionIt
       sliderControl("lintRunRetentionCount", "Lint run retention", "Number of lint run notes to keep.", 5, 50, 5),
       toggleControl("lintFileLinks", "Lint file links", "Wrap file paths in wikilinks in lint run notes."),
       toggleControl("lintInlineMetadata", "Lint inline metadata", "Check inline metadata against the schema."),
+      toggleControl(
+        "conditionSourceFileclass",
+        "Resolve class conditions with Fileclass",
+        "Rules conditioned on the fileClass field (required_when, forbidden_when) read a note's classes from the Fileclass plugin index, so tag-, path- and bookmark-bound notes condition like field-bound ones. Falls back to the frontmatter key when the plugin is absent."
+      ),
       toggleControl("lintExcludeInboxFolder", "Exclude inbox folder", "Skip inbox notes during vault lint."),
       nativeControl("Repair prompt threshold", "When to show the open vault repair button after lint.", {
         type: "dropdown",
