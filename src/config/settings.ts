@@ -45,6 +45,16 @@ export interface ForgeSettings {
   lintRunRetentionCount: number;
   lintFileLinks: boolean;
   lintInlineMetadata: boolean;
+  /**
+   * Validate frontmatter against the Fileclass plugin's class definitions, live.
+   *
+   * Each class already declares which fields it requires and which values its
+   * Select/Cycle/Multi fields allow. With this on, every lint run reads those
+   * declarations through the Fileclass API and checks each note against the
+   * classes it is bound to — beside the schema-note contract, not instead of it.
+   * Inert when the Fileclass plugin is absent.
+   */
+  frontmatterSourceFileclass: boolean;
   lintExcludeInboxFolder: boolean;
   lintRepairThreshold: "errors_only" | "errors_and_warnings";
   activeFileLintAutoMode: ActiveFileLintAutoMode;
@@ -173,6 +183,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   lintRunRetentionCount: 20,
   lintFileLinks: false,
   lintInlineMetadata: true,
+  frontmatterSourceFileclass: false,
   lintExcludeInboxFolder: false,
   lintRepairThreshold: "errors_only",
   activeFileLintAutoMode: "off",
@@ -378,6 +389,7 @@ export function normalizeForgeSettings(settings: ForgeSettings): ForgeSettings {
     ),
     shapeTypeTargetField: normalizeSettingString(settings.shapeTypeTargetField, DEFAULT_SETTINGS.shapeTypeTargetField),
     shapeSourceFileclass: settings.shapeSourceFileclass ?? DEFAULT_SETTINGS.shapeSourceFileclass,
+    frontmatterSourceFileclass: settings.frontmatterSourceFileclass ?? DEFAULT_SETTINGS.frontmatterSourceFileclass,
     shapeCreatedField: normalizeSettingString(settings.shapeCreatedField, DEFAULT_SETTINGS.shapeCreatedField),
     shapeUpdatedField: normalizeSettingString(settings.shapeUpdatedField, DEFAULT_SETTINGS.shapeUpdatedField),
     shapeRelationshipHeading: normalizeSettingString(

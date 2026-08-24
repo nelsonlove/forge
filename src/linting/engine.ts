@@ -5,6 +5,7 @@ import { App, TFile, parseYaml } from "obsidian";
 import {
   collectShapeNamesFromDocuments,
 } from "../shapes/lint";
+import { buildFileclassRuleMap, isFileclassAvailable } from "../fileclass/adapter";
 import {
   createForgeDocument,
 } from "../vault/document";
@@ -57,8 +58,13 @@ export async function runLintForFiles(
   if (!schema) return null;
 
   const paths = getVaultPaths(settings);
-  const documents = await filesToForgeDocuments(app, files.filter(isMarkdownFile));
+  const markdownFiles = files.filter(isMarkdownFile);
+  const documents = await filesToForgeDocuments(app, markdownFiles);
   const shapeDocuments = filesToForgeDocumentsFromMetadata(getMarkdownFiles(app, paths.shapes));
+
+  const fileclassRules = settings.frontmatterSourceFileclass && isFileclassAvailable(app)
+    ? await buildFileclassRuleMap(app, markdownFiles)
+    : undefined;
 
   return runCoreLintForDocuments({
     documents,
@@ -66,6 +72,7 @@ export async function runLintForFiles(
     settings,
     validShapes: collectShapeNamesFromDocuments(shapeDocuments, paths.shapes),
     vaultPath: (app.vault.adapter as VaultAdapterWithBasePath).basePath ?? "",
+    fileclassRules,
   });
 }
 

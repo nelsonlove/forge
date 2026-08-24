@@ -248,6 +248,9 @@ export class ForgeSettingsTab extends PluginSettingTab {
           .setDesc("Add folders to exclude from ontology indexing.");
         this.renderFolderMultiSelect(el);
         return;
+      case "fileclass-frontmatter-source":
+        this.renderFrontmatterSourceFileclass(el);
+        return;
       case "shape-field-configuration":
         this.renderShapeSourceFileclass(el);
         this.renderShapeTypeTargetField(el);
@@ -2555,6 +2558,32 @@ export class ForgeSettingsTab extends PluginSettingTab {
           })
         );
     }
+  }
+
+  private renderFrontmatterSourceFileclass(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    const available = isFileclassAvailable(this.app);
+
+    new Setting(el)
+      .setName("Use Fileclass for frontmatter")
+      .setDesc(
+        available
+          ? "Also validate frontmatter against the Fileclass plugin's class definitions, live. "
+            + "Fields a class marks required must be present, and Select/Cycle/Multi values must "
+            + "come from the class vocabulary. Runs beside the schema-note contract; nothing is "
+            + "restated in the schema note."
+          : "Requires the Fileclass plugin, which is not installed or not enabled."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(s.frontmatterSourceFileclass && available)
+          .setDisabled(!available)
+          .onChange(async (value) => {
+            s.frontmatterSourceFileclass = value;
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      );
   }
 
   private renderShapeSourceFileclass(el: HTMLElement): void {
