@@ -133,6 +133,39 @@ describe("class-conditioned lint rules", () => {
     assert.deepEqual(rulesFor(result), ["forbidden_when"]);
   });
 
+  it("reports the schema-authored class name, not the index's lower-cased form", () => {
+    const result = runLintForDocuments({
+      schema: schemaWithClassConditions(),
+      settings: DEFAULT_SETTINGS,
+      documents: [
+        documentWithFrontmatter("Notes/Lower.md", { tags: ["note/task"] }),
+      ],
+      classesByPath: new Map([["Notes/Lower.md", ["task"]]]),
+    });
+
+    assert.deepEqual(rulesFor(result), ["required_when"]);
+    assert.match(result.results[0].message, /'fileClass' = 'Task'/);
+  });
+
+  it("fires conditionally required inline fields from resolved classes", () => {
+    const schema = schemaWithClassConditions();
+    schema.inline.allowed = [
+      { name: "owner", required_when: { field: "fileClass", values: ["Task"] } },
+    ];
+
+    const result = runLintForDocuments({
+      schema,
+      settings: DEFAULT_SETTINGS,
+      documents: [
+        documentWithFrontmatter("Notes/InlineTagBound.md", { tags: ["note/task"], status: "open" }),
+      ],
+      classesByPath: new Map([["Notes/InlineTagBound.md", ["task"]]]),
+    });
+
+    assert.deepEqual(rulesFor(result), ["required_when"]);
+    assert.match(result.results[0].message, /Inline field 'owner'/);
+  });
+
   it("leaves notes without classes or a fileClass key untouched", () => {
     const result = runLintForDocuments({
       schema: schemaWithClassConditions(),
