@@ -40,16 +40,18 @@ export function headingTextMatches(templateText: string, candidateText: string):
     return true;
   }
 
-  const matches = [...templateText.matchAll(new RegExp(HEADING_PLACEHOLDER_SOURCE, "g"))];
-  if (matches.length === 0) return false;
-
+  const placeholderPattern = new RegExp(HEADING_PLACEHOLDER_SOURCE, "g");
   let pattern = "^";
   let cursor = 0;
-  for (const match of matches) {
-    const index = match.index ?? cursor;
+  let match = placeholderPattern.exec(templateText);
+  if (match === null) return false;
+
+  while (match !== null) {
+    const index = match.index;
     pattern += escapeRegex(templateText.slice(cursor, index));
     pattern += ".+?";
     cursor = index + match[0].length;
+    match = placeholderPattern.exec(templateText);
   }
   pattern += `${escapeRegex(templateText.slice(cursor))}$`;
 

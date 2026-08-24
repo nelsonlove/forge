@@ -1,3 +1,18 @@
+# 3.0.2
+
+## Fixed
+
+- Replaced the ES2020-only `String.matchAll()` call in dynamic Shape heading matching with an ES2018-compatible, fully typed regular-expression loop.
+- Removed unsafe assignment, call, member-access, and argument warnings reported by strict TypeScript source review for `src/shapes/identity.ts`.
+
+## Compatibility
+
+- `minAppVersion` remains `1.10.0`.
+- Dynamic heading matching behavior is unchanged.
+- No settings or note migration is required.
+
+---
+
 # 3.0.1
 
 ## Added
