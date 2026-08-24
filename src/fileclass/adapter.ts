@@ -117,7 +117,9 @@ export async function buildFileclassRuleMap(app: App, files: TFile[]): Promise<F
 
   for (const file of files) {
     const classRules: FileclassClassRules[] = [];
-    for (const className of classNamesForFile(app, file)) {
+    // A note can reach the same class by several binding routes; it still gets
+    // the class's rules once.
+    for (const className of new Set(classNamesForFile(app, file))) {
       const rules = await rulesForClass(className);
       if (rules) classRules.push(rules);
     }

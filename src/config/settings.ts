@@ -50,9 +50,11 @@ export interface ForgeSettings {
    *
    * Each class already declares which fields it requires and which values its
    * Select/Cycle/Multi fields allow. With this on, every lint run reads those
-   * declarations through the Fileclass API and checks each note against the
-   * classes it is bound to — beside the schema-note contract, not instead of it.
-   * Inert when the Fileclass plugin is absent.
+   * declarations through the Fileclass public API and checks each note against
+   * the classes it is bound to — beside the schema-note contract, not instead
+   * of it. Root-level fields only, and only inline vocabularies; a vocabulary
+   * sourced from a note or a Base is skipped, never guessed. Inert when the
+   * Fileclass plugin or its API is absent.
    */
   frontmatterSourceFileclass: boolean;
   lintExcludeInboxFolder: boolean;

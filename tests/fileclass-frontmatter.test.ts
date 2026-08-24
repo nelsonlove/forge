@@ -5,6 +5,7 @@ import {
   lintFileclassFrontmatter,
   type FileclassClassRules,
 } from "../src/fileclass/frontmatter.js";
+import { buildFileclassRuleMap } from "../src/fileclass/adapter.js";
 import { createForgeSettings } from "../src/config/settings.js";
 import { runLintForDocuments, type ForgeDocument } from "../src/linting/model.js";
 import type { VaultSchema } from "../src/schemas/schema.js";
@@ -151,6 +152,49 @@ describe("lintFileclassFrontmatter", () => {
     const findings = lintFileclassFrontmatter({}, [taskRules, other]);
     assert.equal(findings.length, 1);
     assert.match(findings[0]?.message ?? "", /Task/);
+  });
+});
+
+describe("buildFileclassRuleMap", () => {
+  type FakeApp = Parameters<typeof buildFileclassRuleMap>[0];
+  type FakeFile = Parameters<typeof buildFileclassRuleMap>[1][number];
+
+  const file = { path: "Notes/A.md" } as FakeFile;
+  const fields = [{ name: "status", id: "a", type: "Select", options: { required: true }, path: "" }];
+
+  const appWith = (plugin: Record<string, unknown>): FakeApp =>
+    ({ plugins: { plugins: { fileclass: plugin } } } as unknown as FakeApp);
+
+  it("builds a per-path map through the API, fetching each class once", async () => {
+    let calls = 0;
+    const app = appWith({
+      index: { getFileClasses: () => ["Task", "Task"] },
+      api: { getSchema: async () => { calls += 1; return { fields }; } },
+    });
+
+    const map = await buildFileclassRuleMap(app, [file]);
+    assert.deepEqual(map["Notes/A.md"], [{ className: "Task", fields: [{ name: "status", required: true }] }]);
+    assert.equal(calls, 1);
+  });
+
+  it("is inert without the API — an index alone is not availability", async () => {
+    const app = appWith({ index: { getFileClasses: () => ["Task"] } });
+    assert.deepEqual(await buildFileclassRuleMap(app, [file]), {});
+  });
+
+  it("lets an unreadable class contribute nothing instead of failing the run", async () => {
+    const app = appWith({
+      index: { getFileClasses: () => ["Broken", "Task"] },
+      api: {
+        getSchema: async (name: string) => {
+          if (name === "Broken") throw new Error("boom");
+          return { fields };
+        },
+      },
+    });
+
+    const map = await buildFileclassRuleMap(app, [file]);
+    assert.deepEqual(map["Notes/A.md"]?.map((cls) => cls.className), ["Task"]);
   });
 });
 

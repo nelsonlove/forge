@@ -18,7 +18,7 @@ import {
   TFile,
   TFolder,
 } from "obsidian";
-import { isFileclassAvailable } from "../fileclass/adapter";
+import { getFileclassApi, isFileclassAvailable } from "../fileclass/adapter";
 import type { SettingDefinition, SettingDefinitionItem } from "obsidian";
 import type ForgePlugin from "../main";
 import { runExportOverview } from "../commands/export-overview";
@@ -2562,7 +2562,8 @@ export class ForgeSettingsTab extends PluginSettingTab {
 
   private renderFrontmatterSourceFileclass(el: HTMLElement): void {
     const s = this.plugin.settings;
-    const available = isFileclassAvailable(this.app);
+    // This feature needs the Fileclass public API, not just its index.
+    const available = getFileclassApi(this.app) !== null;
 
     new Setting(el)
       .setName("Use Fileclass for frontmatter")
@@ -2570,9 +2571,10 @@ export class ForgeSettingsTab extends PluginSettingTab {
         available
           ? "Also validate frontmatter against the Fileclass plugin's class definitions, live. "
             + "Fields a class marks required must be present, and Select/Cycle/Multi values must "
-            + "come from the class vocabulary. Runs beside the schema-note contract; nothing is "
-            + "restated in the schema note."
-          : "Requires the Fileclass plugin, which is not installed or not enabled."
+            + "come from the class's inline vocabulary (root-level fields only; vocabularies "
+            + "sourced from a note or a Base are not checked). Runs beside the schema-note "
+            + "contract; nothing is restated in the schema note."
+          : "Requires the Fileclass plugin with its public API, which is not installed or not enabled."
       )
       .addToggle((toggle) =>
         toggle

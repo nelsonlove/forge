@@ -5,7 +5,7 @@ import { App, TFile, parseYaml } from "obsidian";
 import {
   collectShapeNamesFromDocuments,
 } from "../shapes/lint";
-import { buildFileclassRuleMap, isFileclassAvailable } from "../fileclass/adapter";
+import { buildFileclassRuleMap, getFileclassApi } from "../fileclass/adapter";
 import {
   createForgeDocument,
 } from "../vault/document";
@@ -62,7 +62,9 @@ export async function runLintForFiles(
   const documents = await filesToForgeDocuments(app, markdownFiles);
   const shapeDocuments = filesToForgeDocumentsFromMetadata(getMarkdownFiles(app, paths.shapes));
 
-  const fileclassRules = settings.frontmatterSourceFileclass && isFileclassAvailable(app)
+  // Gate on the API, not the index — this feature reads schemas through
+  // api.getSchema, and an index-only Fileclass build must not read as available.
+  const fileclassRules = settings.frontmatterSourceFileclass && getFileclassApi(app) !== null
     ? await buildFileclassRuleMap(app, markdownFiles)
     : undefined;
 

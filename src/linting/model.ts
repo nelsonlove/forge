@@ -104,7 +104,12 @@ export interface RunLintForDocumentsInput {
   schema: VaultSchema;
   settings: ForgeSettings;
   validShapes?: string[];
-  /** Per-document Fileclass rules; absent when the frontmatter source is off. */
+  /**
+   * Per-document Fileclass rules; absent when the frontmatter source is off or
+   * the Fileclass API is unavailable, and a path with no checkable rules has no
+   * entry. A note with no frontmatter block stops at `no_frontmatter` — its
+   * fileclass findings surface on the next run, once a block exists.
+   */
   fileclassRules?: FileclassRulesByPath;
   vaultPath?: string;
   timestamp?: string;

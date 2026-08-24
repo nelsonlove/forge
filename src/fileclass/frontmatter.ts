@@ -11,7 +11,8 @@
 // Deliberately narrow in this first cut:
 //   - root-level fields only (`path: ""`) — nested Object fields are not checked
 //   - vocabularies only from an inline values list — a vocabulary sourced from a
-//     note or a Base is skipped rather than guessed, so it can never flag falsely
+//     note or a Base is skipped rather than guessed, so an unresolvable
+//     vocabulary never produces a finding
 //   - severity is "error" for both rules, matching what `fileclass validate` emits
 
 import { isFieldPresent } from "../vault/frontmatter.js";
@@ -79,10 +80,12 @@ function isRequiredOption(options: unknown): boolean {
   return required === true || required === "true";
 }
 
-// Mirrors Fileclass's `listOptionsFromOptions`, minus the sources a linter cannot
-// resolve from plain data: a note-path or Base source yields no vocabulary here.
-// The legacy no-wrapper shape (the options object IS the values map) is narrowed
-// to numeric keys, so constraint keys like `required` never read as values.
+// Mirrors Fileclass's `listOptionsFromOptions`, with three deliberate deviations,
+// each in the skip-rather-than-guess direction: a note-path or Base source yields
+// no vocabulary here; an UNRECOGNIZED sourceType is also skipped (Fileclass falls
+// back to the inline list); and the legacy no-wrapper shape (the options object IS
+// the values map) is narrowed to numeric keys, so constraint keys like `required`
+// never read as values.
 function allowedValuesFromOptions(options: unknown): string[] | undefined {
   if (Array.isArray(options)) {
     const values = options.map((value) => String(value).trim()).filter((value) => value.length > 0);
