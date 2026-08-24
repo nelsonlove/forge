@@ -17,7 +17,7 @@ import {
   type LintSeverity,
 } from "./model";
 import type { ForgeSettings } from "../config/settings";
-import { classesForFile, isFileclassAvailable } from "../fileclass/adapter";
+import { classesForFile, getFileclassIndex } from "../fileclass/adapter";
 import { getVaultPaths } from "../vault/paths";
 import { loadSchema } from "../utils/schema";
 import { getMarkdownFiles, isMarkdownFile } from "../utils/files";
@@ -87,7 +87,13 @@ function resolveClassesByPath(
   settings: ForgeSettings,
   files: TFile[]
 ): Map<string, string[]> | undefined {
-  if (!settings.conditionSourceFileclass || !isFileclassAvailable(app)) return undefined;
+  if (!settings.conditionSourceFileclass) return undefined;
+  const index = getFileclassIndex(app);
+  if (!index) return undefined;
+  // An index that positively knows zero classes hasn't scanned the vault yet
+  // (or the vault truly has none) — conditioning on it would suppress every
+  // class-keyed rule, so fall back to the raw frontmatter key for this run.
+  if (index.fileClassNames !== undefined && index.fileClassNames.length === 0) return undefined;
   return new Map(files.filter(isMarkdownFile).map((file) => [file.path, classesForFile(app, file)]));
 }
 

@@ -17,6 +17,8 @@
 //   forbidden_namespace    — tag uses a namespace in forbidden_namespaces
 //   required_when          — inline field required when frontmatter field has a value
 //   forbidden_when         — field forbidden when another field has a value
+// Conditions keyed on the fileClass field may source their driver values from the
+// Fileclass plugin index (classesByPath) instead of the raw frontmatter key.
 //   tag_consistency        — field value should have matching tag
 //   invalid_shape_ref      — shapes field references unknown shape
 //   inline_is_schema_field — inline metadata key matches a schema frontmatter field
@@ -257,7 +259,7 @@ function lintDocument(
 
   // Inline metadata
   if (settings.lintInlineMetadata) {
-    results.push(...testInlineMetadata(document.path, document.content, schema, fm));
+    results.push(...testInlineMetadata(document.path, document.content, schema, fm, resolvedClasses));
   }
 
   return results;
@@ -506,10 +508,11 @@ function conditionDriverValues(
   return { values: Array.isArray(raw) ? raw.map(String) : [String(raw)], caseInsensitive: false };
 }
 
+/** The rule's own values the driver satisfies — schema-authored spelling, for messages. */
 function matchingDriverValues(driver: { values: string[]; caseInsensitive: boolean }, wanted: string[]): string[] {
-  if (!driver.caseInsensitive) return driver.values.filter((value) => wanted.includes(value));
-  const wantedLower = wanted.map((value) => value.toLowerCase());
-  return driver.values.filter((value) => wantedLower.includes(value.toLowerCase()));
+  if (!driver.caseInsensitive) return wanted.filter((value) => driver.values.includes(value));
+  const driverLower = driver.values.map((value) => value.toLowerCase());
+  return wanted.filter((value) => driverLower.includes(value.toLowerCase()));
 }
 
 function testConditionalRules(
@@ -678,7 +681,8 @@ function testInlineMetadata(
   path: string,
   content: string,
   schema: VaultSchema,
-  fm: Record<string, unknown>
+  fm: Record<string, unknown>,
+  resolvedClasses?: string[]
 ): LintResult[] {
   const results: LintResult[] = [];
   const entries = extractInlineMetadataKeys(content);
@@ -743,13 +747,15 @@ function testInlineMetadata(
   for (const field of conditionalFields) {
     if (!field.required_when) continue;
     const { field: triggerField, values: triggerValues } = field.required_when;
-    const triggerVal = getFmString(fm, triggerField);
-    if (!triggerVal || !triggerValues.includes(triggerVal)) continue;
+    const driver = conditionDriverValues(fm, triggerField, resolvedClasses);
+    if (!driver) continue;
+    const matches = matchingDriverValues(driver, triggerValues);
+    if (matches.length === 0) continue;
 
     if (!foundInlineKeys.has(field.name.toLowerCase())) {
       const severity = field.severity ?? "warning";
       results.push(newResult(path, severity, "required_when",
-        `Inline field '${field.name}' is required when '${triggerField}' = '${triggerVal}'`,
+        `Inline field '${field.name}' is required when '${triggerField}' = '${matches[0]}'`,
         rangeForField(ranges, triggerField)));
     }
   }
