@@ -64,7 +64,11 @@ export async function runLintForFiles(
     documents,
     schema,
     settings,
-    validShapes: collectShapeNamesFromDocuments(shapeDocuments, paths.shapes),
+    validShapes: collectShapeNamesFromDocuments(
+      shapeDocuments,
+      paths.shapes,
+      settings.shapeIncludeSubfolders
+    ),
     vaultPath: (app.vault.adapter as VaultAdapterWithBasePath).basePath ?? "",
   });
 }

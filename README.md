@@ -430,6 +430,8 @@ Shapes are useful for:
 Forge supports:
 
 - recursive shape matching
+- namespaced shapes organized in subfolders
+- dynamic heading placeholders for titles, dates, and similar per-note text
 - shape linting
 - template refinement
 - repair workflows

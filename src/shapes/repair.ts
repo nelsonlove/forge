@@ -8,6 +8,7 @@ import {
   type ParsedHeading,
   type TemplateNode,
 } from "./lint.js";
+import { hasHeadingPlaceholder, headingTextMatches } from "./identity.js";
 
 interface DocSection {
   headingText: string;
@@ -372,19 +373,24 @@ function repairLevel(
 ): DocSection[] {
   const result: DocSection[] = [];
   const consumed = new Set<DocSection>();
+  const matchedSections = new Map<TemplateNode, DocSection>();
 
   for (const templateNode of templateNodes) {
     const match = docSections.find(
       (section) =>
         !consumed.has(section) &&
-        section.headingText.toLowerCase() === templateNode.text.toLowerCase() &&
-        section.headingLevel === templateNode.level
+        headingTextMatches(templateNode.text, section.headingText) &&
+        section.headingLevel === templateNode.level &&
+        !isReservedForFixedSibling(templateNode, templateNodes, section)
     );
 
     if (match) {
       consumed.add(match);
+      matchedSections.set(templateNode, match);
       const repairedChildren = repairLevel(templateNode.children, match.children, descriptions, templateNode.text);
       result.push({ ...match, children: repairedChildren });
+    } else if (hasHeadingPlaceholder(templateNode.text)) {
+      continue;
     } else {
       const prefix = "#".repeat(templateNode.level);
       const context = parentText ? ` (under '${parentText}')` : "";
@@ -413,7 +419,8 @@ function repairLevel(
 
   const originalOrder = docSections
     .filter((section) => consumed.has(section))
-    .map((section) => section.headingText.toLowerCase());
+    .map((section) => [...matchedSections.entries()]
+      .find(([, matchedSection]) => matchedSection === section)?.[0].text.toLowerCase() ?? "");
   const expectedOrder = originalOrder.length > 0
     ? templateNodes
       .map((templateNode) => templateNode.text.toLowerCase())
@@ -428,6 +435,21 @@ function repairLevel(
   }
 
   return result;
+}
+
+function isReservedForFixedSibling(
+  templateNode: TemplateNode,
+  siblings: TemplateNode[],
+  section: DocSection
+): boolean {
+  if (!hasHeadingPlaceholder(templateNode.text)) return false;
+
+  return siblings.some((sibling) =>
+    sibling !== templateNode &&
+    !hasHeadingPlaceholder(sibling.text) &&
+    sibling.level === section.headingLevel &&
+    headingTextMatches(sibling.text, section.headingText)
+  );
 }
 
 function serializeSections(sections: DocSection[]): string[] {

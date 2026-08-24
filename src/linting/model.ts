@@ -125,7 +125,11 @@ export function runLintForDocuments(input: RunLintForDocumentsInput): LintRunRes
   const exemptPaths = buildLintExemptList(settings, schema.exempt_paths);
 
   const allDocuments = uniqueMarkdownDocuments(documents).filter((document) => !isExempt(document.path, exemptPaths));
-  const validShapes = input.validShapes ?? collectShapeNamesFromDocuments(documents, paths.shapes);
+  const validShapes = input.validShapes ?? collectShapeNamesFromDocuments(
+    documents,
+    paths.shapes,
+    settings.shapeIncludeSubfolders
+  );
 
   const allResults: LintResult[] = [];
 

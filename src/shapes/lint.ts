@@ -1,6 +1,14 @@
 import type { ForgeSettings } from "../config/settings.js";
 import { buildShapeLintExemptList, isExempt, localTimestamp, normalisePath } from "../vault/paths.js";
 import type { ForgeDocument, ForgeRange, LintResult, LintRunEnvelope, LintSeverity } from "../linting/model.js";
+import {
+  hasHeadingPlaceholder,
+  headingTextMatches,
+  shapeNameFromPath,
+  templateFileToShapeName,
+} from "./identity.js";
+
+export { templateFileToShapeName } from "./identity.js";
 
 export interface ParsedHeading {
   level: number;
@@ -90,45 +98,58 @@ export function buildShapeHeadingCacheFromTemplates(
 
 export function collectShapeTemplatesFromDocuments(
   documents: ForgeDocument[],
-  templatesFolder: string
+  templatesFolder: string,
+  shapeTypeTargetField = "type"
 ): ForgeShapeTemplate[] {
   const normalizedFolder = normalisePath(templatesFolder).replace(/\/+$/, "");
   if (!normalizedFolder) return [];
 
   const folderPrefix = `${normalizedFolder}/`;
+  const lowerFolderPrefix = folderPrefix.toLowerCase();
 
   return documents
     .filter((document) => {
       const path = normalisePath(document.path);
       return document.extension.toLowerCase() === "md" &&
-        path.startsWith(folderPrefix) &&
-        document.basename.startsWith("Template, ");
+        path.toLowerCase().startsWith(lowerFolderPrefix) &&
+        document.basename.toLowerCase().startsWith("template, ");
     })
-    .map((document) => ({
-      shape: templateFileToShapeName(document.basename),
-      path: document.path,
-      content: document.content,
-    }));
+    .map((document) => {
+      const configuredShape = document.frontmatter[shapeTypeTargetField];
+      return {
+        shape: typeof configuredShape === "string" && configuredShape.trim()
+          ? configuredShape.trim()
+          : templateFileToShapeName(document.basename),
+        path: document.path,
+        content: document.content,
+      };
+    });
 }
 
 export function collectShapeNamesFromDocuments(
   documents: ForgeDocument[],
-  shapesFolder: string
+  shapesFolder: string,
+  includeSubfolders = true
 ): string[] {
   const normalizedFolder = normalisePath(shapesFolder).replace(/\/+$/, "");
   if (!normalizedFolder) return [];
 
   const folderPrefix = `${normalizedFolder}/`;
+  const lowerFolderPrefix = folderPrefix.toLowerCase();
   const seen = new Set<string>();
   const shapes: string[] = [];
 
   for (const document of documents) {
     const path = normalisePath(document.path);
-    if (document.extension.toLowerCase() !== "md" || !path.startsWith(folderPrefix)) continue;
+    if (
+      document.extension.toLowerCase() !== "md" ||
+      !path.toLowerCase().startsWith(lowerFolderPrefix)
+    ) continue;
 
-    const shape = document.basename.trim();
+    const shape = shapeNameFromPath(path, normalizedFolder);
+    if (!shape || (!includeSubfolders && shape.includes("/"))) continue;
     const key = shape.toLowerCase();
-    if (!shape || seen.has(key)) continue;
+    if (seen.has(key)) continue;
 
     seen.add(key);
     shapes.push(shape);
@@ -257,10 +278,6 @@ export function extractHeadings(content: string): ParsedHeading[] {
   return headings;
 }
 
-export function templateFileToShapeName(basename: string): string {
-  return basename.replace(/^Template,\s*/i, "").trim().toLowerCase();
-}
-
 interface DocSection {
   headingText: string;
   headingLevel: number;
@@ -282,13 +299,15 @@ function lintLevel(
   fallbackRange: ForgeRange
 ): void {
   const consumed = new Set<DocSection>();
+  const matchedSections = new Map<TemplateNode, DocSection>();
 
   for (const templateNode of templateNodes) {
     const match = docSections.find(
       (section) =>
         !consumed.has(section) &&
-        section.headingText.toLowerCase() === templateNode.text.toLowerCase() &&
-        section.headingLevel === templateNode.level
+        headingTextMatches(templateNode.text, section.headingText) &&
+        section.headingLevel === templateNode.level &&
+        !isReservedForFixedSibling(templateNode, templateNodes, section)
     );
 
     if (!match) {
@@ -303,6 +322,7 @@ function lintLevel(
       ));
     } else {
       consumed.add(match);
+      matchedSections.set(templateNode, match);
 
       if (!allowEmptySections && !sectionHasMeaningfulContent(match)) {
         results.push(newResult(
@@ -331,7 +351,8 @@ function lintLevel(
 
   const docOrder = docSections
     .filter((section) => consumed.has(section))
-    .map((section) => section.headingText.toLowerCase());
+    .map((section) => [...matchedSections.entries()]
+      .find(([, matchedSection]) => matchedSection === section)?.[0].text.toLowerCase() ?? "");
 
   const expectedOrder = templateNodes
     .map((templateNode) => templateNode.text.toLowerCase())
@@ -379,6 +400,21 @@ function lintLevel(
       unknown.range
     );
   }
+}
+
+function isReservedForFixedSibling(
+  templateNode: TemplateNode,
+  siblings: TemplateNode[],
+  section: DocSection
+): boolean {
+  if (!hasHeadingPlaceholder(templateNode.text)) return false;
+
+  return siblings.some((sibling) =>
+    sibling !== templateNode &&
+    !hasHeadingPlaceholder(sibling.text) &&
+    sibling.level === section.headingLevel &&
+    headingTextMatches(sibling.text, section.headingText)
+  );
 }
 
 function buildDocSectionTree(bodyLines: string[], bodyStartLineIndex: number): { roots: DocSection[] } {

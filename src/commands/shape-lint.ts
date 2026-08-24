@@ -54,7 +54,11 @@ export async function buildShapeHeadingCache(
   }
 
   return buildShapeHeadingCacheFromTemplates(
-    collectShapeTemplatesFromDocuments(templateDocuments, templatesFolder)
+    collectShapeTemplatesFromDocuments(
+      templateDocuments,
+      templatesFolder,
+      settings.shapeTypeTargetField
+    )
   );
 }
 

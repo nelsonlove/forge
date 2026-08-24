@@ -1,34 +1,30 @@
-# Forge 3.0.0
+# Forge 3.0.1
 
-Forge 3 brings cached vault health into Obsidian Bases and adopts Obsidian 1.10.0 as its new minimum version.
+Forge 3.0.1 fixes namespaced Shape handling and adds dynamic heading placeholders for structures derived from external schemas or note templates.
 
 ## Added
 
-- Added a read-only **Forge health** Bases layout for the current Base result set.
-- Added health groups for errors, warnings, notes needing review, clean notes, and notes not included in the latest scan.
-- Added view controls for minimum severity, clean and unscanned visibility, and grouping.
-- Added normal file opening, modifier-click, hover preview, Vault Health access, and explicit health refresh actions.
-- Added an installed workflow guide for configuring and using the view.
+- Added namespaced shape identities derived from paths beneath the configured Shapes folder. For example, `Shapes/Task/Project.md` maps to `Task/Project`.
+- Added non-empty dynamic heading placeholders such as `# {{TITLE}}` and `## Log for {{DATE}}`.
 
-## Changed
+## Fixed
 
-- Forge Health uses cached lint, Shape lint, and review results. Base updates never trigger a vault scan or write health fields into notes.
-- Cached lint and Shape results now record scanned file paths so Forge can distinguish clean notes from unscanned notes.
-- Settings changed outside Obsidian are detected through Obsidian's native callback instead of file polling. Vault Health still asks you to reload before applying synced values.
-- Obsidian 1.13+ receives native declarative settings controls, individual settings search, and inline validation where supported. Obsidian 1.10–1.12 retains Forge's existing settings renderer and persistence behavior.
+- Fixed same-named shapes in different subfolders silently collapsing into one identity.
+- Fixed template refinement overwriting one generated template when namespaced shapes shared a basename.
+- Fixed template lookup so generated frontmatter preserves the readable namespaced identity, with reversible `%2F` filename encoding as a compatibility fallback.
+- Prevented dynamic placeholders from consuming headings reserved for fixed sibling entries.
+- Prevented Shape Repair from inserting literal placeholder text when the missing dynamic value cannot be inferred safely.
 
 ## Compatibility
 
-- Forge 3 requires Obsidian `1.10.0` or newer.
-- Enable the Bases core plugin to use the Forge health layout.
+- Forge requires Obsidian `1.10.0` or newer.
+- Existing flat shape names and template filenames continue to work unchanged.
 - No note or settings migration is required.
-- Run **Reload plugins** after updating so Obsidian registers the new layout.
-- Refresh Forge health once after upgrading to populate clean-versus-unscanned cache data.
+- Shape Repair leaves missing dynamic headings unresolved for manual review because it cannot infer their concrete text.
 
 ## After updating
 
 1. Run **Reload plugins** from the command palette.
-2. Open a Base and select the **Forge health** layout.
-3. Run **Refresh Forge health** once when you are ready to update Forge's normal lint, Shape, report, export, and cache outputs.
-
-Base filter or view-option changes remain read-only and never start that refresh automatically.
+2. Enable **Include subfolders** when using namespaced shapes.
+3. Run **Refine Shape Templates** to generate collision-free namespaced templates.
+4. Run **Shape Lint** to validate the derived structures.

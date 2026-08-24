@@ -61,6 +61,29 @@ describe("shape repair", () => {
     );
   });
 
+  it("preserves concrete dynamic headings and never inserts placeholder text", () => {
+    const matching = applyShapeRepair(
+      "# Apollo Migration\nBody\n# Summary\nDone",
+      [
+        { level: 1, text: "{{TITLE}}", lineIndex: 0 },
+        { level: 1, text: "Summary", lineIndex: 1 },
+      ]
+    );
+    assert.deepEqual(matching.descriptions, []);
+    assert.equal(matching.repairedContent, "# Apollo Migration\nBody\n# Summary\nDone");
+
+    const missing = applyShapeRepair(
+      "# Summary\nDone",
+      [
+        { level: 1, text: "{{TITLE}}", lineIndex: 0 },
+        { level: 1, text: "Summary", lineIndex: 1 },
+      ]
+    );
+    assert.deepEqual(missing.descriptions, []);
+    assert.equal(missing.repairedContent, "# Summary\nDone");
+    assert.doesNotMatch(missing.repairedContent, /\{\{TITLE\}\}/);
+  });
+
   it("returns existing Obsidian skip reasons for per-document repair", () => {
     const settings = { ...DEFAULT_SETTINGS, shapeTypeTargetField: "type" };
     const headingCache = buildShapeHeadingCacheFromTemplates([

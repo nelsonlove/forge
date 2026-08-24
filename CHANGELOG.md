@@ -1,3 +1,24 @@
+# 3.0.1
+
+## Added
+
+- Added namespaced shape identities derived from paths beneath the configured Shapes folder, such as `Task/Project` for `Shapes/Task/Project.md`.
+- Added non-empty dynamic heading placeholders such as `# {{TITLE}}` and `## Log for {{DATE}}` to Shape Lint templates.
+
+## Fixed
+
+- Prevented same-named shapes in different subfolders from collapsing into one shape or overwriting the same generated template.
+- Kept Shape Repair from inserting literal dynamic-heading placeholder text when a concrete heading cannot be inferred.
+
+## Compatibility
+
+- `minAppVersion` remains `1.10.0`.
+- Existing flat shape names and generated template filenames remain unchanged.
+- Namespaced shape templates use a reversible `%2F` filename encoding while preserving the readable identity in template frontmatter.
+- No settings or note migration is required.
+
+---
+
 # 3.0.0
 
 ## Added
