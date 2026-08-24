@@ -7,6 +7,7 @@ import {
   runShapeLintForDocuments,
   templateFileToShapeName,
 } from "../src/shapes/lint.js";
+import { shapeNameToTemplateFileName } from "../src/shapes/identity.js";
 import { DEFAULT_SETTINGS } from "../src/config/settings.js";
 import type { ForgeDocument } from "../src/linting/model.js";
 
@@ -31,6 +32,14 @@ describe("shape heading lint", () => {
 
     assert.deepEqual(headings.map((heading) => heading.text), ["Overview", "Details"]);
     assert.equal(templateFileToShapeName("Template, Project"), "project");
+    assert.equal(
+      templateFileToShapeName("Template, Task%2FProject"),
+      "task/project"
+    );
+    assert.equal(
+      shapeNameToTemplateFileName("Task/Project"),
+      "Template, Task%2FProject.md"
+    );
   });
 
   it("collects shape templates from plain documents", () => {
@@ -75,6 +84,14 @@ describe("shape heading lint", () => {
         frontmatter: {},
         hasFrontmatter: false,
       },
+      {
+        path: "System/Templates/Template, Task%2FProject.md",
+        basename: "Template, Task%2FProject",
+        extension: "md",
+        content: "# {{TITLE}}\n",
+        frontmatter: { type: "Task/Project" },
+        hasFrontmatter: true,
+      },
     ];
 
     assert.deepEqual(collectShapeTemplatesFromDocuments(documents, "/System/Templates/"), [
@@ -87,6 +104,11 @@ describe("shape heading lint", () => {
         shape: "area",
         path: "\\System\\Templates\\Template, Area.MD",
         content: "# Area\n",
+      },
+      {
+        shape: "Task/Project",
+        path: "System/Templates/Template, Task%2FProject.md",
+        content: "# {{TITLE}}\n",
       },
     ]);
     assert.deepEqual(collectShapeTemplatesFromDocuments(documents, ""), []);
@@ -126,12 +148,96 @@ describe("shape heading lint", () => {
         frontmatter: {},
         hasFrontmatter: false,
       },
+      {
+        path: "Forge/Shapes/Collection/Log.md",
+        basename: "Log",
+        extension: "md",
+        content: "",
+        frontmatter: {},
+        hasFrontmatter: false,
+      },
+      {
+        path: "Forge/Shapes/Agent/Log.md",
+        basename: "Log",
+        extension: "md",
+        content: "",
+        frontmatter: {},
+        hasFrontmatter: false,
+      },
     ];
 
     assert.deepEqual(collectShapeNamesFromDocuments(documents, "/Forge/Shapes/"), [
       "project",
       "Capability",
+      "Collection/Log",
+      "Agent/Log",
     ]);
+    assert.deepEqual(
+      collectShapeNamesFromDocuments(documents, "/Forge/Shapes/", false),
+      ["project", "Capability"]
+    );
+  });
+
+  it("matches namespaced shapes and non-empty dynamic heading placeholders", () => {
+    const result = runShapeLintForDocuments({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        shapeLintEnabled: true,
+        shapeLintStrictMode: true,
+      },
+      templates: [
+        {
+          shape: "Task/Project",
+          content: "# {{TITLE}}\n## Log for {{DATE}}\n",
+        },
+      ],
+      documents: [
+        {
+          ...baseDocument,
+          frontmatter: { type: "Task/Project" },
+          content: "---\ntype: Task/Project\n---\n# Apollo Migration\nBody\n## Log for 2026-08-24\nEntry\n",
+        },
+      ],
+    });
+
+    assert.deepEqual(result.results, []);
+  });
+
+  it("requires wildcard headings to contain concrete text", () => {
+    const result = runShapeLintForDocuments({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        shapeLintEnabled: true,
+      },
+      templates: [{ shape: "project", content: "# Log for {{DATE}}\n" }],
+      documents: [
+        {
+          ...baseDocument,
+          content: "---\ntype: project\n---\n# Log for \n",
+        },
+      ],
+    });
+
+    assert.deepEqual(result.results.map((issue) => issue.rule), ["shape_heading_missing"]);
+  });
+
+  it("does not let a wildcard consume a fixed sibling heading", () => {
+    const result = runShapeLintForDocuments({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        shapeLintEnabled: true,
+      },
+      templates: [{ shape: "project", content: "# {{TITLE}}\n# Summary\n" }],
+      documents: [
+        {
+          ...baseDocument,
+          content: "---\ntype: project\n---\n# Summary\nDone\n",
+        },
+      ],
+    });
+
+    assert.deepEqual(result.results.map((issue) => issue.rule), ["shape_heading_missing"]);
+    assert.match(result.results[0]?.message ?? "", /\{\{TITLE\}\}/);
   });
 
   it("reports missing required template headings over plain documents", () => {

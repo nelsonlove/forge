@@ -19,6 +19,7 @@ import { readNote } from "../utils/frontmatter";
 import { ensureFolder, localTimestamp, todayString } from "../utils/files";
 import { VaultSchema, SchemaRelationship } from "../utils/schema";
 import { serializeYaml, trimTrailingWhitespace } from "../utils/yaml";
+import { shapeNameFromPath, shapeNameToTemplateFileName } from "../shapes/identity";
 
 function formatScalarValue(value: unknown): string {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
@@ -120,7 +121,14 @@ export async function refineShapes(plugin: ForgePlugin, dryRun = false): Promise
   gatherShapes(shapesFolder);
 
   for (const shapeFile of shapeFiles) {
-    const result = await processShape(plugin, shapeFile, paths.templates, schema, dryRun);
+    const result = await processShape(
+      plugin,
+      shapeFile,
+      paths.shapes,
+      paths.templates,
+      schema,
+      dryRun
+    );
     results.push(result);
     if (result.status === "created") created++;
     else if (result.status === "updated") updated++;
@@ -136,14 +144,15 @@ export async function refineShapes(plugin: ForgePlugin, dryRun = false): Promise
 async function processShape(
   plugin: ForgePlugin,
   shapeFile: TFile,
+  shapesFolder: string,
   templatesFolder: string,
   schema: VaultSchema | null,
   dryRun: boolean
 ): Promise<RefinementResult> {
   const { app, settings } = plugin;
-  const shapeName = shapeFile.basename;
+  const shapeName = shapeNameFromPath(shapeFile.path, shapesFolder) ?? shapeFile.basename;
 
-  const templateFileName = shapeToTemplateName(shapeName);
+  const templateFileName = shapeNameToTemplateFileName(shapeName);
   const templatePath = `${templatesFolder}/${templateFileName}`;
 
   const note = await readNote(app, shapeFile);
@@ -475,17 +484,6 @@ function promoteHeadings(content: string): string {
       return "#".repeat(m[1].length - 1) + " " + m[2];
     })
     .join("\n");
-}
-
-// ── Name derivation ───────────────────────────────────────────────────────────
-
-function shapeToTemplateName(shapeName: string): string {
-  const title = shapeName
-    .split(/[-_ ]+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
-  return `Template, ${title}.md`;
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
