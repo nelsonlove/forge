@@ -1,7 +1,7 @@
 {
   "name": "forge",
-  "version": "3.0.2",
-  "description": "Define your vault's structure and let Forge enforce it — lint, normalize, patch, and maintain with confidence.",
+  "version": "3.0.2-nl.1",
+  "description": "Define your vault's structure and let Forge enforce it \u2014 lint, normalize, patch, and maintain with confidence.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
