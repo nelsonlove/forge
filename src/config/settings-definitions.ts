@@ -17,6 +17,7 @@ export type ForgeCustomSettingsSection =
   | "install-docs"
   | "frontmatter-field-order"
   | "schema-configuration"
+  | "fileclass-frontmatter-source"
   | "stale-review-fields"
   | "export-actions"
   | "export-schema-fields"
@@ -208,6 +209,12 @@ function buildLint(context: ForgeSettingsDefinitionContext): SettingDefinitionIt
         key: "schemaVersionLocation",
         options: { inline: "Inline (key:: Value)", frontmatter: "Frontmatter" },
         defaultValue: "inline",
+      }),
+      custom({
+        id: "fileclass-frontmatter-source",
+        name: "Use Fileclass for frontmatter",
+        desc: "Validate frontmatter against the Fileclass plugin's class definitions during lint.",
+        aliases: ["fileclass", "frontmatter source", "required fields", "vocabulary"],
       }),
     ]),
     folderControl("lintRunsFolder", "Lint reports folder", "Folder where lint run reports are written.", "System/Exports/LintReports"),
