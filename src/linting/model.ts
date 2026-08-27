@@ -26,6 +26,8 @@
 //   inline_fuzzy_inline    — inline key looks like a typo of a known inline field
 //   inline_undocumented    — inline key not in schema inline.allowed list
 //   unique_field           — frontmatter field value must be unique across scanned notes
+//   fileclass_required     — field required by one of the note's Fileclass classes is missing or empty
+//   fileclass_enum         — field value not in the vocabulary a Fileclass class declares
 //   stale_note             — note's review cycle has elapsed; review item, not lint warning
 //   stale_inbox_note       — inbox note is older than the configured retention threshold; review item, not lint warning
 // Shape heading validation is handled by the separate Shape Lint service.
@@ -43,6 +45,7 @@ import {
   reviewCycleDays,
 } from "../schemas/schema.js";
 import { collectShapeNamesFromDocuments } from "../shapes/lint.js";
+import { lintFileclassFrontmatter, type FileclassRulesByPath } from "../fileclass/frontmatter.js";
 import { getTags } from "../utils/tags.js";
 import { isFieldPresent, getFmString } from "../vault/frontmatter.js";
 
@@ -103,6 +106,13 @@ export interface RunLintForDocumentsInput {
   schema: VaultSchema;
   settings: ForgeSettings;
   validShapes?: string[];
+  /**
+   * Per-document Fileclass rules; absent when the frontmatter source is off or
+   * the Fileclass API is unavailable, and a path with no checkable rules has no
+   * entry. A note with no frontmatter block stops at `no_frontmatter` — its
+   * fileclass findings surface on the next run, once a block exists.
+   */
+  fileclassRules?: FileclassRulesByPath;
   vaultPath?: string;
   timestamp?: string;
   now?: number;
@@ -144,7 +154,7 @@ export function runLintForDocuments(input: RunLintForDocumentsInput): LintRunRes
   const allResults: LintResult[] = [];
 
   for (const document of allDocuments) {
-    allResults.push(...lintDocument(document, schema, validShapes, settings, paths.shapes, input.classesByPath?.get(document.path)));
+    allResults.push(...lintDocument(document, schema, validShapes, settings, paths.shapes, input.fileclassRules?.[document.path], input.classesByPath?.get(document.path)));
   }
 
   allResults.push(...testUniqueFields(allDocuments, schema));
@@ -222,6 +232,7 @@ function lintDocument(
   validShapes: string[],
   settings: ForgeSettings,
   shapesPath: string,
+  fileclassRules?: import("../fileclass/frontmatter.js").FileclassClassRules[],
   resolvedClasses?: string[]
 ): LintResult[] {
   const results: LintResult[] = [];
@@ -260,6 +271,17 @@ function lintDocument(
   // Inline metadata
   if (settings.lintInlineMetadata) {
     results.push(...testInlineMetadata(document.path, document.content, schema, fm, resolvedClasses));
+  }
+
+  // Fileclass-declared rules, when the frontmatter source is on
+  if (fileclassRules && fileclassRules.length > 0) {
+    results.push(...lintFileclassFrontmatter(fm, fileclassRules).map((finding) => newResult(
+      document.path,
+      finding.severity,
+      finding.rule,
+      finding.message,
+      finding.rule === "fileclass_enum" ? rangeForField(ranges, finding.field) : ranges.frontmatter
+    )));
   }
 
   return results;
@@ -959,6 +981,10 @@ function suggestedActionForLintRule(rule: string): string {
       return "Review this note and update its review date when complete.";
     case "stale_inbox_note":
       return "Review, file, or clear this inbox note.";
+    case "fileclass_required":
+      return "Add the field the note's fileclass marks required, or unmark it in the class.";
+    case "fileclass_enum":
+      return "Use one of the values the note's fileclass allows, or extend the class vocabulary.";
     default:
       return "Review this file against the current Forge schema.";
   }
