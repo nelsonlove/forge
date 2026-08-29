@@ -1,6 +1,7 @@
 import type { ForgeSettings } from "../config/settings.js";
 import { buildShapeLintExemptList, isExempt, localTimestamp, normalisePath } from "../vault/paths.js";
 import type { ForgeDocument, ForgeRange, LintResult, LintRunEnvelope, LintSeverity } from "../linting/model.js";
+import { scanHeadings, scanHeadingsInContent } from "./headings.js";
 import {
   hasHeadingPlaceholder,
   headingTextMatches,
@@ -241,41 +242,7 @@ export function flattenTemplateTree(nodes: TemplateNode[]): TemplateNode[] {
 }
 
 export function extractHeadings(content: string): ParsedHeading[] {
-  const lines = content.split("\n");
-  const headings: ParsedHeading[] = [];
-  let inFrontmatter = false;
-  let frontmatterDone = false;
-  let lineIndex = 0;
-
-  for (const line of lines) {
-    if (!frontmatterDone) {
-      if (lineIndex === 0 && line.trim() === "---") {
-        inFrontmatter = true;
-        lineIndex++;
-        continue;
-      }
-      if (inFrontmatter && line.trim() === "---") {
-        inFrontmatter = false;
-        frontmatterDone = true;
-        lineIndex++;
-        continue;
-      }
-      if (inFrontmatter) {
-        lineIndex++;
-        continue;
-      }
-      frontmatterDone = true;
-    }
-
-    const match = line.match(/^(#{1,6})\s+(.+)$/);
-    if (match) {
-      headings.push({ level: match[1].length, text: match[2].trim(), lineIndex });
-    }
-
-    lineIndex++;
-  }
-
-  return headings;
+  return scanHeadingsInContent(content);
 }
 
 interface DocSection {
@@ -455,12 +422,7 @@ function buildDocSectionTree(bodyLines: string[], bodyStartLineIndex: number): {
 }
 
 function extractHeadingsFromLines(lines: string[]): ParsedHeading[] {
-  const headings: ParsedHeading[] = [];
-  for (let index = 0; index < lines.length; index++) {
-    const match = lines[index].match(/^(#{1,6})\s+(.+)$/);
-    if (match) headings.push({ level: match[1].length, text: match[2].trim(), lineIndex: index });
-  }
-  return headings;
+  return scanHeadings(lines);
 }
 
 function splitFrontmatter(lines: string[]): {
