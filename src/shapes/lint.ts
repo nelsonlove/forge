@@ -158,6 +158,29 @@ export function collectShapeNamesFromDocuments(
   return shapes;
 }
 
+/**
+ * The shape names a note claims, from the configured type field.
+ *
+ * The field is normally one string, but it may legitimately hold a list: a note can be
+ * of more than one kind, and metadata plugins write the key that way. Forge's own enum
+ * check already accepts both shapes, so reading only strings here made the two halves
+ * of the same plugin disagree about what the field means — and a list-valued note was
+ * skipped in silence, which reads exactly like a note that passed.
+ *
+ * Non-string entries are dropped rather than coerced: `String(value)` on a nested map
+ * yields "[object Object]", which would then miss every shape and look like clean data.
+ */
+function shapeNamesFromField(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : [value];
+  const names: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const trimmed = entry.trim();
+    if (trimmed) names.push(trimmed);
+  }
+  return names;
+}
+
 export function lintShapeHeadingsForDocument(
   document: ForgeDocument,
   settings: ForgeSettings,
@@ -170,8 +193,8 @@ export function lintShapeHeadingsForDocument(
 
   if (!document.hasFrontmatter) return results;
 
-  const typeValue = document.frontmatter[settings.shapeTypeTargetField];
-  if (!typeValue || typeof typeValue !== "string") return results;
+  const shapeNames = shapeNamesFromField(document.frontmatter[settings.shapeTypeTargetField]);
+  if (shapeNames.length === 0) return results;
 
   if (settings.shapeLintScope === "folder") {
     const folders = settings.shapeLintFolders ?? [];
@@ -181,28 +204,33 @@ export function lintShapeHeadingsForDocument(
     }
   }
 
-  const shapeName = typeValue.trim().toLowerCase();
-  const templateHeadings = headingCache.get(shapeName);
-  if (!templateHeadings || templateHeadings.length === 0) return results;
-
   const lines = document.content.split("\n");
   const { bodyLines, bodyStartLineIndex } = splitFrontmatter(lines);
-  const templateRoots = buildTemplateTree(templateHeadings);
-  const { roots: docRoots } = buildDocSectionTree(bodyLines, bodyStartLineIndex);
   const documentRange = rangeForLine(lines, 0);
 
-  lintLevel(
-    templateRoots,
-    docRoots,
-    document.path,
-    typeValue,
-    strict,
-    flagExtraHeadings,
-    allowEmptySections,
-    results,
-    null,
-    documentRange
-  );
+  // Each claimed shape is checked independently against the whole document. A heading
+  // consumed by one shape is still available to the next: two shapes may require the
+  // same section, and satisfying both with one heading is correct, not a collision.
+  for (const typeValue of shapeNames) {
+    const templateHeadings = headingCache.get(typeValue.toLowerCase());
+    if (!templateHeadings || templateHeadings.length === 0) continue;
+
+    const templateRoots = buildTemplateTree(templateHeadings);
+    const { roots: docRoots } = buildDocSectionTree(bodyLines, bodyStartLineIndex);
+
+    lintLevel(
+      templateRoots,
+      docRoots,
+      document.path,
+      typeValue,
+      strict,
+      flagExtraHeadings,
+      allowEmptySections,
+      results,
+      null,
+      documentRange
+    );
+  }
 
   return results;
 }
