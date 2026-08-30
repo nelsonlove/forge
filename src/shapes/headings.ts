@@ -30,6 +30,51 @@ const HEADING = /^(#{1,6})\s+(.+)$/;
 const FENCE = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 
 /**
+ * Is this line a fence opener? CommonMark forbids a backtick in a backtick fence's info
+ * string — ```js``` is a paragraph, not an opener. Accepting it opened a fence that
+ * never closed, losing every heading after it.
+ */
+function openingFence(line: string): string | null {
+  const m = FENCE.exec(line);
+  if (!m) return null;
+  if (m[1][0] === "`" && m[2].includes("`")) return null;
+  return m[1];
+}
+
+/**
+ * Comment-visible text of a line, and the comment state after it.
+ *
+ * `%%` toggles an Obsidian comment, but NOT inside an inline code span: `` `%%` `` is
+ * literal, and treating it as a delimiter opened a comment that ran to end of file and
+ * silently swallowed every heading below. That is worse than the phantom headings this
+ * module exists to remove — it is unbounded, and Shape Repair then re-inserts the
+ * "missing" headings into the note. Measured on one vault: nine notes lost headings,
+ * five of them purely because they mentioned `%%` in inline code.
+ *
+ * Text outside comments is returned so a heading sharing its line with a comment —
+ * `# Title %% draft %%` — is still a heading, as Obsidian renders it.
+ */
+function stripComments(line: string, inComment: boolean): { text: string; inComment: boolean } {
+  let out = "";
+  let i = 0;
+  while (i < line.length) {
+    if (!inComment && line[i] === "`") {
+      // An inline code span is opaque: copy it whole rather than scanning inside it.
+      const run = /^`+/.exec(line.slice(i))![0];
+      const close = line.indexOf(run, i + run.length);
+      if (close === -1) { out += line.slice(i); break; } // unclosed span — rest is literal
+      out += line.slice(i, close + run.length);
+      i = close + run.length;
+      continue;
+    }
+    if (line.startsWith("%%", i)) { inComment = !inComment; i += 2; continue; }
+    if (!inComment) out += line[i];
+    i++;
+  }
+  return { text: out, inComment };
+}
+
+/**
  * Headings in `lines`, skipping fenced code blocks and `%%` comments.
  *
  * `lineIndex` is the index within `lines`, so a caller that has already split off
@@ -46,7 +91,7 @@ export function scanHeadings(lines: string[]): ScannedHeading[] {
     if (fence !== null) {
       // Only a run of the same character, at least as long as the opener, closes it —
       // and a closing fence carries no info string.
-      const close = line.match(FENCE);
+      const close = FENCE.exec(line);
       if (
         close &&
         close[1][0] === fence[0] &&
@@ -58,26 +103,16 @@ export function scanHeadings(lines: string[]): ScannedHeading[] {
       continue;
     }
 
-    const open = line.match(FENCE);
-    if (open) {
-      fence = open[1];
-      continue;
+    // Fences win over comments: a %% inside a code block is content, not a delimiter.
+    if (!inComment) {
+      const opener = openingFence(line);
+      if (opener) { fence = opener; continue; }
     }
 
-    // Count markers before deciding, so `%% aside %%` on one line stays balanced and a
-    // single trailing marker opens a block that runs to the next one.
-    const markers = (line.match(/%%/g) ?? []).length;
-    if (inComment) {
-      if (markers % 2 === 1) inComment = false;
-      continue;
-    }
-    if (markers > 0) {
-      if (markers % 2 === 1) inComment = true;
-      // A heading cannot also be a comment delimiter; skip either way.
-      continue;
-    }
+    const stripped = stripComments(line, inComment);
+    inComment = stripped.inComment;
 
-    const match = line.match(HEADING);
+    const match = HEADING.exec(stripped.text);
     if (match) {
       headings.push({ level: match[1].length, text: match[2].trim(), lineIndex: index });
     }
@@ -96,9 +131,11 @@ export function splitFrontmatterLines(
       return { bodyLines: lines.slice(index + 1), bodyStartLineIndex: index + 1 };
     }
   }
-  // An unterminated opener is not frontmatter — treat the whole file as body rather than
-  // silently dropping every heading in it.
-  return { bodyLines: lines, bodyStartLineIndex: 0 };
+  // An unterminated opener means the whole file reads as frontmatter, which is what the
+  // scanner this replaced did. Treating it as body is the dangerous direction: for a
+  // TEMPLATE it would promote a YAML comment line to a template heading, and Shape
+  // Repair would then insert that line into every note claiming the shape.
+  return { bodyLines: [], bodyStartLineIndex: 0 };
 }
 
 /** Headings in a whole note or template, frontmatter excluded, offsets absolute. */

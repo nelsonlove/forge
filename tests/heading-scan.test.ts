@@ -55,10 +55,6 @@ describe("heading scanning", () => {
     assert.equal(found[0].lineIndex, 4);
   });
 
-  it("treats an unterminated frontmatter opener as body", () => {
-    // Dropping the whole file would silently remove every heading in it.
-    assert.deepEqual(texts("---\nstill going\n\n# Title\n"), ["Title"]);
-  });
 
   it("reports line numbers relative to the lines it was given", () => {
     assert.deepEqual(scanHeadings(["intro", "# Title"]), [
@@ -70,5 +66,51 @@ describe("heading scanning", () => {
     assert.deepEqual(scanHeadings(["###   Spaced   "]), [
       { level: 3, text: "Spaced", lineIndex: 0 },
     ]);
+  });
+
+  // ── regressions found in review ────────────────────────────────────────────
+
+  it("does not treat %% inside inline code as a comment delimiter", () => {
+    // The live bug: one `%%` in prose swallowed every heading below it.
+    const content = "# Title\n\nUse `%%` to hide text.\n\n## Real\n\n### Also real\n";
+    assert.deepEqual(texts(content), ["Title", "Real", "Also real"]);
+  });
+
+  it("handles a multi-backtick inline code span containing %%", () => {
+    assert.deepEqual(texts("# Title\n\n``a %% b``\n\n## Real\n"), ["Title", "Real"]);
+  });
+
+  it("keeps a heading that shares its line with a balanced comment", () => {
+    assert.deepEqual(texts("# Title %% draft %%\n\n## Next\n"), ["Title", "Next"]);
+  });
+
+  it("still honours a genuine unclosed block comment", () => {
+    // Obsidian comments to end of document; matching that is correct.
+    assert.deepEqual(texts("# Title\n\n%%\n## Hidden\n### Also hidden\n"), ["Title"]);
+  });
+
+
+  it("does not open a fence on backticks inside the info string", () => {
+    // CommonMark: ```js``` is a paragraph. Opening a fence here lost every later heading.
+    assert.deepEqual(texts("# Title\n\n```js```\n\n## Real\n"), ["Title", "Real"]);
+  });
+
+  it("treats %% inside a fenced block as content, not a delimiter", () => {
+    assert.deepEqual(texts("# Title\n\n```\n%%\n```\n\n## Real\n"), ["Title", "Real"]);
+  });
+
+  it("returns nothing for unterminated frontmatter", () => {
+    // A malformed template must be inert, not half-interpreted: treating the YAML as
+    // body would make a comment line an H1 that Shape Repair inserts into every note.
+    assert.deepEqual(texts("---\n# my template notes\ntype: shape\n\n# Real\n"), []);
+  });
+
+  it("reports correct lineIndex after a fence and after a comment", () => {
+    const found = scanHeadingsInContent("# A\n```\n# skipped\n```\n%%\nhidden\n%%\n## B\n");
+    assert.deepEqual(found.map((h) => [h.text, h.lineIndex]), [["A", 0], ["B", 7]]);
+  });
+
+  it("a 4-space indented fence marker is not a fence", () => {
+    assert.deepEqual(texts("# Title\n\n    ```\n\n## Real\n"), ["Title", "Real"]);
   });
 });
