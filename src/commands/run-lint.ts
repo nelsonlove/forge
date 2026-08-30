@@ -11,6 +11,7 @@
 
 import { App, Modal, Notice } from "obsidian";
 import type ForgePlugin from "../main";
+import { getVaultPaths } from "../vault/paths";
 import { LintRunResult } from "../linting/engine";
 import {
   writeLintReportJson,
@@ -44,10 +45,16 @@ export async function runVaultLint(plugin: ForgePlugin): Promise<LintRunResult |
   const result = await plugin.lintService.runLint("run-vault-lint");
 
   if (!result) {
-    new Notice(
-      "Forge: Could not load schema.md — lint aborted. Run Validate Schema to diagnose.",
-      6000
-    );
+    // Say which failure this is. A missing file and an unparseable one have different
+    // fixes, and the unparseable case is the dangerous one — the note looks fine in the
+    // editor while every run validates nothing. (One missing colon once cost a day.)
+    const schemaPath = getVaultPaths(settings).schemaMd;
+    const exists = !!app.vault.getAbstractFileByPath(schemaPath);
+    const reason = exists
+      ? `schema note exists at ${schemaPath} but could not be parsed`
+      : `schema note not found at ${schemaPath}`;
+    console.error(`[Forge] lint aborted: ${reason}`);
+    new Notice(`Forge: ${reason} — lint aborted. Run Validate Schema to diagnose.`, 8000);
     return null;
   }
 
