@@ -126,14 +126,17 @@ export interface ForgeSettings {
   shapeTemplatesFolder: string;
   shapeTypeTargetField: string;      // frontmatter dropdown
   /**
-   * Read a note's classes from the Fileclass plugin rather than one frontmatter field.
+   * Let template refinement read Fileclass class notes as shape sources.
    *
-   * Fileclass binds a note by tag, path, bookmark group or base view as well as by a
-   * field, and a note may hold several classes at once — none of which a single string
-   * in a single field can express. With this on, a class definition's own body is the
-   * expected structure, so no shape notes or generated templates are involved.
+   * A class definition is the same artifact as a shape note — a spec a human reads
+   * with one marked region a machine compiles. With this on, `Refine Shape Templates`
+   * also compiles the fenced block under each class note's `## Shape` heading into a
+   * template, beside the shape notes in the shapes folder. The pipeline is unchanged:
+   * lint still reads only templates, so editing a class note changes nothing until
+   * refinement is deliberately run. A shape note with the same name wins, and the
+   * shadowed class is reported rather than silently merged.
    */
-  shapeSourceFileclass: boolean;
+  refinementSourceFileclass: boolean;
   /**
    * Resolve class-conditioned frontmatter lint rules (required_when /
    * forbidden_when on the fileClass field) through the Fileclass plugin index
@@ -260,7 +263,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   shapeRefinementEnabled: false,
   shapeTemplatesFolder: "System/Templates",
   shapeTypeTargetField: "type",
-  shapeSourceFileclass: false,
+  refinementSourceFileclass: false,
   conditionSourceFileclass: false,
   shapeCreatedField: "created",
   shapeUpdatedField: "updated",
@@ -399,7 +402,7 @@ export function normalizeForgeSettings(settings: ForgeSettings): ForgeSettings {
       DEFAULT_SETTINGS.shapeTemplatesFolder
     ),
     shapeTypeTargetField: normalizeSettingString(settings.shapeTypeTargetField, DEFAULT_SETTINGS.shapeTypeTargetField),
-    shapeSourceFileclass: settings.shapeSourceFileclass ?? DEFAULT_SETTINGS.shapeSourceFileclass,
+    refinementSourceFileclass: settings.refinementSourceFileclass ?? DEFAULT_SETTINGS.refinementSourceFileclass,
     conditionSourceFileclass: settings.conditionSourceFileclass ?? DEFAULT_SETTINGS.conditionSourceFileclass,
     frontmatterSourceFileclass: settings.frontmatterSourceFileclass ?? DEFAULT_SETTINGS.frontmatterSourceFileclass,
     shapeCreatedField: normalizeSettingString(settings.shapeCreatedField, DEFAULT_SETTINGS.shapeCreatedField),

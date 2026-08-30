@@ -20,6 +20,8 @@ import { ensureFolder, localTimestamp, todayString } from "../utils/files";
 import { VaultSchema, SchemaRelationship } from "../utils/schema";
 import { serializeYaml, trimTrailingWhitespace } from "../utils/yaml";
 import { shapeNameFromPath, shapeNameToTemplateFileName } from "../shapes/identity";
+import { extractShapeBlock } from "../fileclass/shape-source";
+import { getFileclassIndex, isFileclassAvailable } from "../fileclass/adapter";
 
 function formatScalarValue(value: unknown): string {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
@@ -99,9 +101,6 @@ export async function refineShapes(plugin: ForgePlugin, dryRun = false): Promise
   }
 
   const shapesFolder = app.vault.getAbstractFileByPath(paths.shapes);
-  if (!(shapesFolder instanceof TFolder)) {
-    return { results, created, updated, skipped, errors, ranAt: localTimestamp() };
-  }
 
   // Load schema once for the whole run if relationship injection is enabled
   const schema = settings.shapeInjectRelationships
@@ -118,9 +117,16 @@ export async function refineShapes(plugin: ForgePlugin, dryRun = false): Promise
       }
     }
   };
-  gatherShapes(shapesFolder);
+  if (shapesFolder instanceof TFolder) gatherShapes(shapesFolder);
 
+  // Shape names the shapes folder already claims, for shadow detection below. A name
+  // is claimed even when its note is later skipped (wrong type, no Structure section):
+  // an authored shape note is the deliberate artifact either way, and flipping the
+  // winner based on its parse state would make precedence unstable.
+  const claimedNames = new Set<string>();
   for (const shapeFile of shapeFiles) {
+    const name = shapeNameFromPath(shapeFile.path, paths.shapes) ?? shapeFile.basename;
+    claimedNames.add(name.trim().toLowerCase());
     const result = await processShape(
       plugin,
       shapeFile,
@@ -136,7 +142,64 @@ export async function refineShapes(plugin: ForgePlugin, dryRun = false): Promise
     else errors++;
   }
 
+  // The Fileclass pass: class notes as a second source, compiled through the same
+  // pipeline. A shape note always wins its name; the shadowed class is reported, never
+  // silently merged.
+  if (settings.refinementSourceFileclass && isFileclassAvailable(app)) {
+    const index = getFileclassIndex(app);
+    for (const className of index?.fileClassNames ?? []) {
+      const file = index?.getFileClassFile?.(className);
+      if (!file) continue;
+      const result = await processClassSource(plugin, className, file, schema, dryRun, claimedNames);
+      if (!result) continue; // class declares no shape block — not a finding, just not a source
+      results.push(result);
+      if (result.status === "created") created++;
+      else if (result.status === "updated") updated++;
+      else if (result.status === "skipped") skipped++;
+      else errors++;
+    }
+  }
+
   return { results, created, updated, skipped, errors, ranAt: localTimestamp() };
+}
+
+/**
+ * One class note as a refinement source: the fenced block under its `## Shape` heading,
+ * taken verbatim — no promotion, because fenced content stands outside the note's own
+ * heading tree and is already rooted at the levels it means.
+ */
+async function processClassSource(
+  plugin: ForgePlugin,
+  className: string,
+  file: TFile,
+  schema: VaultSchema | null,
+  dryRun: boolean,
+  claimedNames: Set<string>
+): Promise<RefinementResult | null> {
+  const { app, settings } = plugin;
+  const shapeName = className.trim();
+  const templateFileName = shapeNameToTemplateFileName(shapeName);
+
+  let raw: string;
+  try {
+    raw = await app.vault.cachedRead(file);
+  } catch {
+    return error(shapeName, templateFileName, "Could not read class note");
+  }
+
+  const block = extractShapeBlock(raw.replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, ""));
+  if (!block) return null;
+
+  if (claimedNames.has(shapeName.toLowerCase())) {
+    return skipped(shapeName, templateFileName, `Shadowed by the shape note of the same name — the shape note wins`);
+  }
+
+  let body = block;
+  if (schema && settings.shapeInjectRelationships) {
+    body = injectRelationshipHeadings(body, shapeName, schema, settings);
+  }
+
+  return writeTemplateForShape(plugin, shapeName, body, dryRun);
 }
 
 // ── Per-shape processing ──────────────────────────────────────────────────────
@@ -177,6 +240,25 @@ async function processShape(
   if (schema && settings.shapeInjectRelationships) {
     body = injectRelationshipHeadings(body, shapeName, schema, settings);
   }
+
+  return writeTemplateForShape(plugin, shapeName, body, dryRun);
+}
+
+/**
+ * The write half of refinement, shared by both sources. Everything before this differs
+ * by source — where the structure came from, and whether it was promoted — but a
+ * template is a template: same frontmatter, same change detection, same dry-run shape.
+ */
+async function writeTemplateForShape(
+  plugin: ForgePlugin,
+  shapeName: string,
+  body: string,
+  dryRun: boolean
+): Promise<RefinementResult> {
+  const { app, settings } = plugin;
+  const templatesFolder = getVaultPaths(settings).templates;
+  const templateFileName = shapeNameToTemplateFileName(shapeName);
+  const templatePath = `${templatesFolder}/${templateFileName}`;
 
   const today = todayString();
   const existingTemplate = app.vault.getAbstractFileByPath(templatePath);
