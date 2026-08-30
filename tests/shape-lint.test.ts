@@ -450,3 +450,82 @@ describe("shape heading lint", () => {
     assert.deepEqual(result.results.map((issue) => issue.file), ["Work/Reference Missing Overview.md"]);
   });
 });
+
+describe("shape lint with a list-valued type field", () => {
+  const settings = { ...DEFAULT_SETTINGS, shapeLintEnabled: true, shapeTypeTargetField: "type" };
+  const templates = [
+    { shape: "Note", content: "## Purpose\n" },
+    { shape: "Task", content: "## Steps\n" },
+  ];
+  const doc = (type: unknown, content: string) => ({
+    ...baseDocument,
+    content,
+    frontmatter: { type },
+    hasFrontmatter: true,
+  });
+  const missing = (r: { results: { rule: string; message: string }[] }) =>
+    r.results.filter((x) => x.rule === "shape_heading_missing").map((x) => x.message);
+
+  it("checks every shape in the list, not just the first", () => {
+    // Body satisfies Note but not Task; the Task heading must still be reported.
+    const result = runShapeLintForDocuments({
+      settings,
+      templates,
+      documents: [doc(["Note", "Task"], "---\ntype:\n  - Note\n  - Task\n---\n\n## Purpose\n\ntext\n")],
+    });
+    const m = missing(result);
+    assert.equal(m.length, 1);
+    assert.match(m[0], /Steps/);
+  });
+
+  it("lets one heading satisfy two shapes that both require it", () => {
+    const result = runShapeLintForDocuments({
+      settings,
+      templates: [
+        { shape: "Note", content: "## Purpose\n" },
+        { shape: "Task", content: "## Purpose\n" },
+      ],
+      documents: [doc(["Note", "Task"], "---\ntype:\n  - Note\n  - Task\n---\n\n## Purpose\n\ntext\n")],
+    });
+    assert.deepEqual(missing(result), []);
+  });
+
+  it("still handles a plain string exactly as before", () => {
+    const result = runShapeLintForDocuments({
+      settings,
+      templates,
+      documents: [doc("Task", "---\ntype: Task\n---\n\nno headings\n")],
+    });
+    assert.equal(missing(result).length, 1);
+  });
+
+  it("ignores unknown shapes in the list without dropping the known ones", () => {
+    const result = runShapeLintForDocuments({
+      settings,
+      templates,
+      documents: [doc(["Nonexistent", "Task"], "---\ntype:\n  - Nonexistent\n  - Task\n---\n\nno headings\n")],
+    });
+    const m = missing(result);
+    assert.equal(m.length, 1);
+    assert.match(m[0], /Steps/);
+  });
+
+  it("drops non-string entries rather than coercing them", () => {
+    // String({}) is "[object Object]" — coercing would match nothing and read as clean.
+    const result = runShapeLintForDocuments({
+      settings,
+      templates,
+      documents: [doc([{ nested: true }, 7, null], "---\ntype: []\n---\n\nno headings\n")],
+    });
+    assert.deepEqual(result.results, []);
+  });
+
+  it("skips an empty list", () => {
+    const result = runShapeLintForDocuments({
+      settings,
+      templates,
+      documents: [doc([], "---\ntype: []\n---\n\nno headings\n")],
+    });
+    assert.deepEqual(result.results, []);
+  });
+});
