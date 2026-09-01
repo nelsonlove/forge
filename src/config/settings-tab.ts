@@ -251,6 +251,9 @@ export class ForgeSettingsTab extends PluginSettingTab {
       case "fileclass-frontmatter-source":
         this.renderFrontmatterSourceFileclass(el);
         return;
+      case "fileclass-field-order-source":
+        this.renderFieldOrderSourceFileclass(el);
+        return;
       case "shape-field-configuration":
         this.renderShapeTypeTargetField(el);
         this.renderShapeDateField(el, "Created field", "Schema date field stamped when a template is first created. Set to none to skip.", "shapeCreatedField");
@@ -2558,6 +2561,33 @@ export class ForgeSettingsTab extends PluginSettingTab {
           })
         );
     }
+  }
+
+  private renderFieldOrderSourceFileclass(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    const available = isFileclassAvailable(this.app);
+
+    new Setting(el)
+      .setName("Order frontmatter by Fileclass")
+      .setDesc(
+        available
+          ? "Normalize writes each note's frontmatter in the order its class declares, "
+            + "inheritance and the class's own field order already applied. A note with no "
+            + "class keeps the global field order below. This is the only Fileclass setting "
+            + "that changes what Forge WRITES rather than what it reports — dry-run a "
+            + "normalize before turning it on for a whole vault."
+          : "Requires the Fileclass plugin, which is not installed or not enabled."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(s.fieldOrderSourceFileclass && available)
+          .setDisabled(!available)
+          .onChange(async (value) => {
+            s.fieldOrderSourceFileclass = value;
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      );
   }
 
   private renderFrontmatterSourceFileclass(el: HTMLElement): void {
