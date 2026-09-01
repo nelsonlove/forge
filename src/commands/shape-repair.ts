@@ -39,6 +39,7 @@ import {
 import type ForgePlugin from "../main";
 import { getVaultPaths } from "../vault/paths";
 import { buildShapeHeadingCache } from "./shape-lint";
+import { shapeNamesFromField } from "../shapes/lint";
 import type { ParsedHeading } from "./shape-lint";
 import { readNote, backupNote } from "../utils/frontmatter";
 import { ensureFolder, localTimestamp } from "../utils/files";
@@ -152,10 +153,13 @@ async function repairNote(
     const note = await readNote(app, file);
     if (!note || !note.hasFrontmatter) return skip(file.path, "No frontmatter");
 
-    const typeValue = note.frontmatter[settings.shapeTypeTargetField];
-    if (!typeValue || typeof typeValue !== "string") return skip(file.path, "No type target field");
+    // Same field reading as lint; repair still acts on one shape. See src/shapes/repair.ts.
+    const shapeNames = shapeNamesFromField(note.frontmatter[settings.shapeTypeTargetField]);
+    if (shapeNames.length === 0) return skip(file.path, "No type target field");
+    if (shapeNames.length > 1) return skip(file.path, `Claims ${shapeNames.length} shapes; repair handles one`);
+    const typeValue = shapeNames[0];
 
-    const shapeName = typeValue.trim().toLowerCase();
+    const shapeName = typeValue.toLowerCase();
     const templateHeadings = headingCache.get(shapeName);
     if (!templateHeadings || templateHeadings.length === 0) return skip(file.path, "No matching template");
 
