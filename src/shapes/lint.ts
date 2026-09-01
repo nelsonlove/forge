@@ -159,6 +159,36 @@ export function collectShapeNamesFromDocuments(
   return shapes;
 }
 
+/**
+ * The shape names a note claims, from the configured type field.
+ *
+ * The field is normally one string, but it may legitimately hold a list: a note can be
+ * of more than one kind, and metadata plugins write the key that way. Forge's own enum
+ * check already accepts both shapes, so reading only strings here made the two halves
+ * of the same plugin disagree about what the field means — and a list-valued note was
+ * skipped in silence, which reads exactly like a note that passed.
+ *
+ * Non-string entries are dropped rather than coerced: `String(value)` on a nested map
+ * yields "[object Object]", which would then miss every shape and look like clean data.
+ */
+export function shapeNamesFromField(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : [value];
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (typeof entry !== "string") continue;
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    // The heading cache is keyed lower-case, so `Task` and `task` are one shape. Without
+    // this, a list repeating an entry lints it twice and reports byte-identical findings.
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    names.push(trimmed);
+  }
+  return names;
+}
+
 export function lintShapeHeadingsForDocument(
   document: ForgeDocument,
   settings: ForgeSettings,
@@ -171,8 +201,8 @@ export function lintShapeHeadingsForDocument(
 
   if (!document.hasFrontmatter) return results;
 
-  const typeValue = document.frontmatter[settings.shapeTypeTargetField];
-  if (!typeValue || typeof typeValue !== "string") return results;
+  const shapeNames = shapeNamesFromField(document.frontmatter[settings.shapeTypeTargetField]);
+  if (shapeNames.length === 0) return results;
 
   if (settings.shapeLintScope === "folder") {
     const folders = settings.shapeLintFolders ?? [];
@@ -182,28 +212,48 @@ export function lintShapeHeadingsForDocument(
     }
   }
 
-  const shapeName = typeValue.trim().toLowerCase();
-  const templateHeadings = headingCache.get(shapeName);
-  if (!templateHeadings || templateHeadings.length === 0) return results;
-
   const lines = document.content.split("\n");
   const { bodyLines, bodyStartLineIndex } = splitFrontmatter(lines);
-  const templateRoots = buildTemplateTree(templateHeadings);
-  const { roots: docRoots } = buildDocSectionTree(bodyLines, bodyStartLineIndex);
   const documentRange = rangeForLine(lines, 0);
 
-  lintLevel(
-    templateRoots,
-    docRoots,
-    document.path,
-    typeValue,
-    strict,
-    flagExtraHeadings,
-    allowEmptySections,
-    results,
-    null,
-    documentRange
-  );
+  // Built once, not per shape. Each lintLevel call creates its own local consumed-set
+  // and never mutates a DocSection, so sharing the tree across shapes is safe — the
+  // per-shape isolation comes from that local set, not from rebuilding the tree.
+  const { roots: docRoots } = buildDocSectionTree(bodyLines, bodyStartLineIndex);
+
+  // Union of what every claimed shape matched, so extras can be judged once. Judging
+  // them per shape would call each shape's headings extra from the others' point of
+  // view, and report a fully conformant note as entirely wrong.
+  const consumedAll = new Set<DocSection>();
+  const linted: string[] = [];
+
+  for (const typeValue of shapeNames) {
+    const templateHeadings = headingCache.get(typeValue.toLowerCase());
+    if (!templateHeadings || templateHeadings.length === 0) continue;
+    linted.push(typeValue);
+
+    lintLevel(
+      buildTemplateTree(templateHeadings),
+      docRoots,
+      document.path,
+      typeValue,
+      strict,
+      flagExtraHeadings,
+      allowEmptySections,
+      results,
+      null,
+      documentRange,
+      consumedAll
+    );
+  }
+
+  if (flagExtraHeadings && linted.length > 0) {
+    // Keep the single-shape wording byte-identical to what it has always been.
+    const shapeLabel = linted.length === 1
+      ? `shape '${linted[0]}' template`
+      : `the templates of shapes ${linted.map((n) => `'${n}'`).join(", ")}`;
+    reportExtras(docRoots, consumedAll, document.path, shapeLabel, strict, results, null);
+  }
 
   return results;
 }
@@ -263,7 +313,16 @@ function lintLevel(
   allowEmptySections: boolean,
   results: LintResult[],
   parentText: string | null,
-  fallbackRange: ForgeRange
+  fallbackRange: ForgeRange,
+  /**
+   * Sections this pass matched, accumulated across every shape a note claims.
+   *
+   * Extras cannot be judged one shape at a time: a heading required by shape B is
+   * unmatched from shape A's point of view, so a note that satisfies BOTH would be told
+   * every heading is extra. The caller collects consumption here and runs one extras
+   * pass over what no shape claimed.
+   */
+  consumedOut: Set<DocSection>
 ): void {
   const consumed = new Set<DocSection>();
   const matchedSections = new Map<TemplateNode, DocSection>();
@@ -289,6 +348,7 @@ function lintLevel(
       ));
     } else {
       consumed.add(match);
+      consumedOut.add(match);
       matchedSections.set(templateNode, match);
 
       if (!allowEmptySections && !sectionHasMeaningfulContent(match)) {
@@ -311,7 +371,8 @@ function lintLevel(
         allowEmptySections,
         results,
         templateNode.text,
-        match.range
+        match.range,
+        consumedOut
       );
     }
   }
@@ -338,35 +399,6 @@ function lintLevel(
     ));
   }
 
-  if (!flagExtraHeadings) return;
-
-  const unknowns = docSections.filter((section) => !consumed.has(section));
-  for (const unknown of unknowns) {
-    const severity: LintSeverity = unknown.headingLevel === 1
-      ? strict ? "error" : "warning"
-      : strict ? "warning" : "info";
-    const ctx = parentText ? ` under '${parentText}'` : "";
-    results.push(newResult(
-      filePath,
-      severity,
-      "shape_heading_extra",
-      `Extra heading: '${unknown.headingText}'${ctx} (not in shape '${typeValue}' template)`,
-      unknown.range
-    ));
-
-    lintLevel(
-      [],
-      unknown.children,
-      filePath,
-      typeValue,
-      strict,
-      flagExtraHeadings,
-      allowEmptySections,
-      results,
-      unknown.headingText,
-      unknown.range
-    );
-  }
 }
 
 function isReservedForFixedSibling(
@@ -488,4 +520,42 @@ function newResult(
   return range
     ? { file, severity, rule, message, range }
     : { file, severity, rule, message };
+}
+
+/**
+ * Headings no claimed shape accounts for.
+ *
+ * Run once, after every shape has been matched, over the union of what they consumed.
+ * A section a shape matched is not extra; its children are still checked, because a
+ * matched parent can hold unexpected subsections. An unmatched section is extra, and
+ * everything beneath it is extra too.
+ */
+function reportExtras(
+  docSections: DocSection[],
+  consumedAll: Set<DocSection>,
+  filePath: string,
+  shapeLabel: string,
+  strict: boolean,
+  results: LintResult[],
+  parentText: string | null
+): void {
+  for (const section of docSections) {
+    if (consumedAll.has(section)) {
+      reportExtras(section.children, consumedAll, filePath, shapeLabel, strict, results, section.headingText);
+      continue;
+    }
+    const severity: LintSeverity = section.headingLevel === 1
+      ? strict ? "error" : "warning"
+      : strict ? "warning" : "info";
+    const ctx = parentText ? ` under '${parentText}'` : "";
+    results.push(newResult(
+      filePath,
+      severity,
+      "shape_heading_extra",
+      `Extra heading: '${section.headingText}'${ctx} (not in ${shapeLabel})`,
+      section.range
+    ));
+    // Everything under an unaccounted heading is unaccounted too.
+    reportExtras(section.children, new Set(), filePath, shapeLabel, strict, results, section.headingText);
+  }
 }
