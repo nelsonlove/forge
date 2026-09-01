@@ -19,6 +19,7 @@
 //   - Write a summary notice on completion
 
 import { App, Modal, Notice, TFile } from "obsidian";
+import { fieldOrderForFile } from "../fileclass/adapter";
 import { planNormalizeFrontmatter, planNormalizeTags } from "../vault/normalization";
 import { buildVaultScanExemptList } from "../vault/paths";
 import type ForgePlugin from "../main";
@@ -106,7 +107,7 @@ async function normalizeTagsPass(
     if (!dryRun) {
       await backupNote(app, file, paths.patchBackups);
       note.frontmatter = plan.frontmatter;
-      await writeNote(app, note, settings.frontmatterFieldOrder);
+      await writeNote(app, note, orderFor(app, settings, file));
     }
 
     results.push({
@@ -200,7 +201,7 @@ async function normalizeFrontmatterPass(
     if (!dryRun) {
       await backupNote(app, file, paths.patchBackups);
       note.frontmatter = plan.frontmatter;
-      await writeNote(app, note, settings.frontmatterFieldOrder);
+      await writeNote(app, note, orderFor(app, settings, file));
     }
 
     results.push({
@@ -287,4 +288,22 @@ class NormalizeConfirmModal extends Modal {
   onClose(): void {
     this.contentEl.empty();
   }
+}
+
+/**
+ * The key order to write a note with: its classes' order when Fileclass is the source
+ * and the note has one, otherwise the configured global list.
+ *
+ * Falling back rather than merging is deliberate. A note with no class has no per-class
+ * opinion to honour, and appending the global list behind a class's order would
+ * reintroduce exactly the disagreement this setting exists to end.
+ */
+function orderFor(
+  app: import("obsidian").App,
+  settings: import("../config/settings").ForgeSettings,
+  file: import("obsidian").TFile
+): string[] {
+  if (!settings.fieldOrderSourceFileclass) return settings.frontmatterFieldOrder;
+  const fromClass = fieldOrderForFile(app, file);
+  return fromClass.length > 0 ? fromClass : settings.frontmatterFieldOrder;
 }

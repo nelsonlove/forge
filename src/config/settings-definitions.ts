@@ -18,6 +18,7 @@ export type ForgeCustomSettingsSection =
   | "frontmatter-field-order"
   | "schema-configuration"
   | "fileclass-frontmatter-source"
+  | "fileclass-field-order-source"
   | "stale-review-fields"
   | "export-actions"
   | "export-schema-fields"
@@ -209,6 +210,12 @@ function buildLint(context: ForgeSettingsDefinitionContext): SettingDefinitionIt
         key: "schemaVersionLocation",
         options: { inline: "Inline (key:: Value)", frontmatter: "Frontmatter" },
         defaultValue: "inline",
+      }),
+      custom({
+        id: "fileclass-field-order-source",
+        name: "Order frontmatter by Fileclass",
+        desc: "Write each note's frontmatter in the order its class declares, instead of the global field order.",
+        aliases: ["fileclass", "field order", "frontmatter order", "normalize"],
       }),
       custom({
         id: "fileclass-frontmatter-source",

@@ -21,6 +21,8 @@ import {
 interface FileclassIndex {
   getFileClasses(file: TFile): string[];
   getAncestors?(className: string): string[];
+  /** Fields of a class, inheritance resolved and already in the class's declared order. */
+  getResolvedFields?(className: string): { name?: unknown; path?: unknown }[];
   getFileClassFile?(className: string): TFile | null | undefined;
   fileClassNames?: string[];
 }
@@ -126,4 +128,45 @@ export async function buildFileclassRuleMap(app: App, files: TFile[]): Promise<F
     if (classRules.length > 0) map[file.path] = classRules;
   }
   return map;
+}
+
+/**
+ * Frontmatter field order for a note, taken from the classes it is bound to.
+ *
+ * Order is a per-class fact — `Reference/Link` wants url, rating, read, status; `Action`
+ * wants delegable, surfaces, implements, variables — and Forge's own setting is a single
+ * global list, which structurally cannot express that. Where the two disagree, Normalize
+ * Frontmatter and Fileclass's own note-rendering reorder each other's output forever.
+ *
+ * Fileclass resolves inheritance and applies each class's `fieldsOrder` before handing
+ * fields out, so the order here is already the one it would use itself. A note bound to
+ * several classes gets them concatenated in binding order, first class first, each field
+ * appearing once.
+ *
+ * Root-level fields only: nested Object children are addressed by a `path` of parent ids,
+ * which is not a frontmatter key and has no place in a key order.
+ *
+ * Returns [] when the plugin is absent or the note has no class — the caller then keeps
+ * Forge's configured order, so nothing changes for an unclassed vault.
+ */
+export function fieldOrderForFile(app: App, file: TFile): string[] {
+  const index = getFileclassIndex(app);
+  if (!index?.getResolvedFields) return [];
+  const order: string[] = [];
+  const seen = new Set<string>();
+  try {
+    for (const className of classNamesForFile(app, file)) {
+      for (const field of index.getResolvedFields(className) ?? []) {
+        // A non-empty `path` means a child of an Object field, not a frontmatter key.
+        if (typeof field?.path === "string" && field.path !== "") continue;
+        const name = typeof field?.name === "string" ? field.name.trim() : "";
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        order.push(name);
+      }
+    }
+  } catch {
+    return [];
+  }
+  return order;
 }

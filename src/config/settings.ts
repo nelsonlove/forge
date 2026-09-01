@@ -138,6 +138,20 @@ export interface ForgeSettings {
    */
   refinementSourceFileclass: boolean;
   /**
+   * Order a note's frontmatter by its Fileclass classes rather than the global list.
+   *
+   * Field order is a per-class fact and `frontmatterFieldOrder` is one list for the whole
+   * vault, so the two disagree for any class whose fields it does not name — and then
+   * Normalize Frontmatter and Fileclass's own rendering reorder each other's output on
+   * every run. With this on, a note that has a class is ordered the way that class
+   * declares (inheritance and `fieldsOrder` already applied by Fileclass); a note with no
+   * class, or any vault without the plugin, keeps the configured order untouched.
+   *
+   * This is the one Fileclass integration that changes what Forge WRITES rather than what
+   * it reports. Dry-run a normalize before enabling it over a whole vault.
+   */
+  fieldOrderSourceFileclass: boolean;
+  /**
    * Resolve class-conditioned frontmatter lint rules (required_when /
    * forbidden_when on the fileClass field) through the Fileclass plugin index
    * instead of the raw frontmatter key. Binding route stops mattering: a note
@@ -264,6 +278,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   shapeTemplatesFolder: "System/Templates",
   shapeTypeTargetField: "type",
   refinementSourceFileclass: false,
+  fieldOrderSourceFileclass: false,
   conditionSourceFileclass: false,
   shapeCreatedField: "created",
   shapeUpdatedField: "updated",
@@ -403,6 +418,7 @@ export function normalizeForgeSettings(settings: ForgeSettings): ForgeSettings {
     ),
     shapeTypeTargetField: normalizeSettingString(settings.shapeTypeTargetField, DEFAULT_SETTINGS.shapeTypeTargetField),
     refinementSourceFileclass: settings.refinementSourceFileclass ?? DEFAULT_SETTINGS.refinementSourceFileclass,
+    fieldOrderSourceFileclass: settings.fieldOrderSourceFileclass ?? DEFAULT_SETTINGS.fieldOrderSourceFileclass,
     conditionSourceFileclass: settings.conditionSourceFileclass ?? DEFAULT_SETTINGS.conditionSourceFileclass,
     frontmatterSourceFileclass: settings.frontmatterSourceFileclass ?? DEFAULT_SETTINGS.frontmatterSourceFileclass,
     shapeCreatedField: normalizeSettingString(settings.shapeCreatedField, DEFAULT_SETTINGS.shapeCreatedField),
