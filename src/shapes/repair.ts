@@ -9,6 +9,7 @@ import {
   type TemplateNode,
 } from "./lint.js";
 import { hasHeadingPlaceholder, headingTextMatches } from "./identity.js";
+import { scanHeadings } from "./headings.js";
 
 interface DocSection {
   headingText: string;
@@ -484,12 +485,7 @@ function splitFrontmatterLines(lines: string[]): {
 }
 
 function extractHeadingsFromLines(lines: string[]): ParsedHeading[] {
-  const headings: ParsedHeading[] = [];
-  for (let index = 0; index < lines.length; index++) {
-    const match = lines[index].match(/^(#{1,6})\s+(.+)$/);
-    if (match) headings.push({ level: match[1].length, text: match[2].trim(), lineIndex: index });
-  }
-  return headings;
+  return scanHeadings(lines);
 }
 
 function uniqueMarkdownDocuments(documents: ForgeDocument[]): ForgeDocument[] {
