@@ -179,3 +179,41 @@ describe("shape repair", () => {
     assert.match(artifact.content, /Insert missing heading: '## Details'/);
   });
 });
+
+describe("shape repair and a list-valued type field", () => {
+  const settings = { ...DEFAULT_SETTINGS, shapeTypeTargetField: "type" };
+  const templates = [{ shape: "Task", content: "# Steps\n" }];
+  const docFor = (type: unknown): ForgeDocument => ({
+    ...baseDocument,
+    path: "Notes/Thing.md",
+    basename: "Thing",
+    content: "---\ntype: x\n---\n\nbody\n",
+    frontmatter: { type },
+    hasFrontmatter: true,
+  });
+  const plan = (type: unknown) =>
+    planShapeRepairForDocuments({ settings, templates, documents: [docFor(type)], dryRun: true });
+
+  it("repairs a single-entry list, which it used to refuse outright", () => {
+    // Lint reports these notes; repair must not silently decline to fix them.
+    const r = plan(["Task"]);
+    assert.equal(r.run.skipped, 0);
+    assert.equal(r.run.repaired, 1);
+    assert.deepEqual(r.run.files[0].operations, ["Insert missing heading: '# Steps'"]);
+  });
+
+  it("declines a multi-shape note with an accurate reason", () => {
+    // Repair WRITES, and merging two templates has no defined heading order — so it
+    // says so, rather than reporting the misleading "No type target field".
+    const r = plan(["Task", "Note"]);
+    assert.equal(r.run.skipped, 1);
+    assert.equal(r.run.repaired, 0);
+    assert.match(JSON.stringify(r.run), /repair handles one/);
+  });
+
+  it("still declines a non-string type field", () => {
+    const r = plan(2026);
+    assert.equal(r.run.skipped, 1);
+    assert.match(JSON.stringify(r.run), /No type target field/);
+  });
+});

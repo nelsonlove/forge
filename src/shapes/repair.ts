@@ -7,6 +7,7 @@ import {
   type ForgeShapeTemplate,
   type ParsedHeading,
   type TemplateNode,
+  shapeNamesFromField,
 } from "./lint.js";
 import { hasHeadingPlaceholder, headingTextMatches } from "./identity.js";
 import { scanHeadings } from "./headings.js";
@@ -158,12 +159,20 @@ export function repairShapeDocument(input: RepairShapeDocumentInput): ShapeRepai
   try {
     if (!document.hasFrontmatter) return { file: skip(document.path, "No frontmatter") };
 
-    const typeValue = document.frontmatter[settings.shapeTypeTargetField];
-    if (!typeValue || typeof typeValue !== "string") {
+    // Read the field the same way lint does, so repair cannot be blind to a note lint
+    // reports on. Repair still acts on ONE shape: it WRITES, and merging two templates
+    // has no defined heading order, so a note claiming several is declined with an
+    // accurate reason rather than half-repaired.
+    const shapeNames = shapeNamesFromField(document.frontmatter[settings.shapeTypeTargetField]);
+    if (shapeNames.length === 0) {
       return { file: skip(document.path, "No type target field") };
     }
+    if (shapeNames.length > 1) {
+      return { file: skip(document.path, `Claims ${shapeNames.length} shapes; repair handles one`) };
+    }
+    const typeValue = shapeNames[0];
 
-    const shapeName = typeValue.trim().toLowerCase();
+    const shapeName = typeValue.toLowerCase();
     const templateHeadings = headingCache.get(shapeName);
     if (!templateHeadings || templateHeadings.length === 0) {
       return { file: skip(document.path, "No matching template") };

@@ -528,4 +528,101 @@ describe("shape lint with a list-valued type field", () => {
     });
     assert.deepEqual(result.results, []);
   });
+
+  // ── regressions found in review ────────────────────────────────────────────
+
+  const strictSettings = {
+    ...DEFAULT_SETTINGS,
+    shapeLintEnabled: true,
+    shapeTypeTargetField: "type",
+    shapeLintStrictMode: true,
+    lintStrictMode: true,
+  };
+
+  it("does not call one shape's headings extra from another shape's view", () => {
+    // The note satisfies BOTH shapes completely. Judging extras per shape reported
+    // every heading as extra — N x (N-1) errors on a fully conformant note.
+    const result = runShapeLintForDocuments({
+      settings: strictSettings,
+      templates: [
+        { shape: "Note", content: "# Purpose\n" },
+        { shape: "Task", content: "# Steps\n" },
+      ],
+      documents: [doc(["Note", "Task"], "---\ntype:\n  - Note\n  - Task\n---\n\n# Purpose\n\na\n\n# Steps\n\nb\n")],
+    });
+    assert.deepEqual(result.results.filter((r) => r.rule === "shape_heading_extra"), []);
+  });
+
+  it("still reports a heading no claimed shape accounts for", () => {
+    const result = runShapeLintForDocuments({
+      settings: strictSettings,
+      templates: [
+        { shape: "Note", content: "# Purpose\n" },
+        { shape: "Task", content: "# Steps\n" },
+      ],
+      documents: [doc(["Note", "Task"], "---\ntype:\n  - Note\n  - Task\n---\n\n# Purpose\n\na\n\n# Steps\n\nb\n\n# Surprise\n\nc\n")],
+    });
+    const extra = result.results.filter((r) => r.rule === "shape_heading_extra");
+    assert.equal(extra.length, 1);
+    assert.match(extra[0].message, /Surprise/);
+  });
+
+  it("keeps the single-shape extra-heading wording unchanged", () => {
+    const result = runShapeLintForDocuments({
+      settings: strictSettings,
+      templates: [{ shape: "Note", content: "# Purpose\n" }],
+      documents: [doc("Note", "---\ntype: Note\n---\n\n# Purpose\n\na\n\n# Surprise\n\nb\n")],
+    });
+    const extra = result.results.filter((r) => r.rule === "shape_heading_extra");
+    assert.equal(extra.length, 1);
+    assert.match(extra[0].message, /not in shape 'Note' template/);
+  });
+
+  it("lints a repeated or case-variant entry only once", () => {
+    // The heading cache is keyed lower-case, so these are one shape, not three.
+    const result = runShapeLintForDocuments({
+      settings,
+      templates: [{ shape: "Task", content: "## Steps\n" }],
+      documents: [doc(["Task", "task", "Task"], "---\ntype:\n  - Task\n  - task\n  - Task\n---\n\nno headings\n")],
+    });
+    assert.equal(result.results.filter((r) => r.rule === "shape_heading_missing").length, 1);
+  });
+
+  it("reports a shared missing heading once per shape that requires it", () => {
+    // Pinning the policy rather than leaving it accidental: each contract reports its
+    // own unmet requirement, so the message names which shape is unsatisfied.
+    const result = runShapeLintForDocuments({
+      settings,
+      templates: [
+        { shape: "Note", content: "## Purpose\n" },
+        { shape: "Task", content: "## Purpose\n" },
+      ],
+      documents: [doc(["Note", "Task"], "---\ntype:\n  - Note\n  - Task\n---\n\nno headings\n")],
+    });
+    const missing = result.results.filter((r) => r.rule === "shape_heading_missing");
+    assert.equal(missing.length, 2);
+    assert.deepEqual(missing.map((m) => /shape '([^']+)'/.exec(m.message)?.[1]).sort(), ["Note", "Task"]);
+  });
+
+  it("ignores a non-string scalar exactly as before", () => {
+    for (const t of [2026, true, { a: 1 }, "   "]) {
+      const result = runShapeLintForDocuments({
+        settings,
+        templates: [{ shape: "Task", content: "## Steps\n" }],
+        documents: [doc(t, "---\ntype: x\n---\n\nno headings\n")],
+      });
+      assert.deepEqual(result.results, [], `expected no findings for ${JSON.stringify(t)}`);
+    }
+  });
+
+  it("trims a padded shape name in the finding message", () => {
+    const result = runShapeLintForDocuments({
+      settings,
+      templates: [{ shape: "Task", content: "## Steps\n" }],
+      documents: [doc("  Task  ", "---\ntype: Task\n---\n\nno headings\n")],
+    });
+    const missing = result.results.filter((r) => r.rule === "shape_heading_missing");
+    assert.equal(missing.length, 1);
+    assert.match(missing[0].message, /required by shape 'Task'/);
+  });
 });
