@@ -264,3 +264,78 @@ describe("runLintForDocuments with fileclass rules", () => {
     assert.deepEqual(result.results, []);
   });
 });
+
+describe("fileclass pattern rule", () => {
+  const withPattern = (pattern: unknown, extra: Record<string, unknown> = {}) =>
+    fieldRulesFromSchemaFields([
+      { name: "period", type: "Input", path: "", options: { pattern, ...extra } },
+    ]);
+  const ISO = "^\\d{4}(-(0[1-9]|1[0-2])|-W(0[1-9]|[1-4]\\d|5[0-3])|-Q[1-4])?$";
+  const rules = (pattern: string): FileclassClassRules[] =>
+    [{ className: "Collection/Period", fields: [{ name: "period", required: false, pattern }] }];
+
+  it("reads options.pattern into a rule", () => {
+    assert.deepEqual(withPattern(ISO), [{ name: "period", required: false, pattern: ISO }]);
+  });
+
+  it("keeps a field that has ONLY a pattern — no required, no vocabulary", () => {
+    // Without this the field would be dropped as "checks nothing".
+    assert.equal(withPattern("^x$").length, 1);
+  });
+
+  it("drops an unparseable pattern rather than reporting every note", () => {
+    // Skip-rather-than-guess: a broken declaration must not fail the whole class.
+    assert.deepEqual(withPattern("^[unclosed"), []);
+  });
+
+  it("ignores a non-string or blank pattern, and a bare values-list options array", () => {
+    assert.deepEqual(withPattern(42), []);
+    assert.deepEqual(withPattern("   "), []);
+    assert.deepEqual(fieldRulesFromSchemaFields([
+      { name: "period", type: "Input", path: "", options: ["a", "b"] },
+    ]), []);
+  });
+
+  it("carries a pattern alongside required and a vocabulary", () => {
+    const r = fieldRulesFromSchemaFields([
+      { name: "provider", type: "Select", path: "",
+        options: { required: true, pattern: "^c", sourceType: "ValuesList", valuesList: { "1": "claude" } } },
+    ]);
+    assert.deepEqual(r, [{ name: "provider", required: true, allowedValues: ["claude"], pattern: "^c" }]);
+  });
+
+  it("passes a matching value and flags a mismatching one", () => {
+    assert.deepEqual(lintFileclassFrontmatter({ period: "2026-07" }, rules(ISO)), []);
+    const bad = lintFileclassFrontmatter({ period: "07-2026" }, rules(ISO));
+    assert.equal(bad.length, 1);
+    assert.equal(bad[0].rule, "fileclass_pattern");
+    assert.match(bad[0].message, /07-2026/);
+  });
+
+  it("accepts every ISO grain the vault uses", () => {
+    for (const v of ["2026", "2026-07", "2026-W26", "2026-Q3"]) {
+      assert.deepEqual(lintFileclassFrontmatter({ period: v }, rules(ISO)), [], `expected ${v} to pass`);
+    }
+  });
+
+  it("says nothing when the field is absent — that is what required is for", () => {
+    assert.deepEqual(lintFileclassFrontmatter({}, rules(ISO)), []);
+  });
+
+  it("checks each entry of a list value", () => {
+    const bad = lintFileclassFrontmatter({ period: ["2026", "nope"] }, rules(ISO));
+    assert.equal(bad.length, 1);
+    assert.match(bad[0].message, /'nope'/);
+    assert.doesNotMatch(bad[0].message, /'2026'/);
+  });
+
+  it("coerces a number but ignores a non-scalar", () => {
+    assert.deepEqual(lintFileclassFrontmatter({ period: 2026 }, rules(ISO)), []);
+    assert.deepEqual(lintFileclassFrontmatter({ period: { a: 1 } }, rules(ISO)), []);
+  });
+
+  it("reports a field once even when several classes declare the same pattern", () => {
+    const two = [...rules(ISO), ...rules(ISO)];
+    assert.equal(lintFileclassFrontmatter({ period: "bad" }, two).length, 1);
+  });
+});
