@@ -28,6 +28,7 @@
 //   unique_field           — frontmatter field value must be unique across scanned notes
 //   fileclass_required     — field required by one of the note's Fileclass classes is missing or empty
 //   fileclass_enum         — field value not in the vocabulary a Fileclass class declares
+//   fileclass_pattern      — field value does not match the pattern a Fileclass class declares
 //   stale_note             — note's review cycle has elapsed; review item, not lint warning
 //   stale_inbox_note       — inbox note is older than the configured retention threshold; review item, not lint warning
 // Shape heading validation is handled by the separate Shape Lint service.
@@ -280,7 +281,7 @@ function lintDocument(
       finding.severity,
       finding.rule,
       finding.message,
-      finding.rule === "fileclass_enum" ? rangeForField(ranges, finding.field) : ranges.frontmatter
+      finding.rule === "fileclass_required" ? ranges.frontmatter : rangeForField(ranges, finding.field)
     )));
   }
 
