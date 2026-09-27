@@ -6,6 +6,10 @@ data.json
 dist/
 coverage/
 .tmp-test/
+# Claude Code's working directory, including the git worktrees it cuts under
+# .claude/worktrees/. Without this, a worktree shows as untracked in the main
+# checkout and a `git add -A` there would stage an entire second copy of the repo.
+.claude/
 # Archives
 *.zip
 *.tar
