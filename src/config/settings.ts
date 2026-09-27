@@ -122,6 +122,28 @@ export interface ForgeSettings {
   shapeLintExcludeInboxFolder: boolean;
   shapeLintScope: "all" | "folder";
   shapeLintFolders: string[];
+  /**
+   * Take the shape a note is linted against from its Fileclass class note, not from a
+   * generated template file.
+   *
+   * A class note already states its structure twice over: a `## Shape` fence, which is
+   * the contract a note must still satisfy months after it was made, and a `## Template`
+   * fence, which is the body a new note is born as. Refinement compiles the first into a
+   * template file, and lint reads only that file — so a class edit changes nothing until
+   * refinement is deliberately run, and a vault whose templates folder is empty lints
+   * against nothing at all while looking perfectly healthy.
+   *
+   * With this on, shape lint reads the class notes directly at lint time. A class's own
+   * `## Shape` fence is its shape; where it declares none, the shape is derived from its
+   * `## Template` fence by keeping the heading lines and turning each generator into the
+   * `{{…}}` wildcard the matcher already understands. Nothing is generated and nothing
+   * is stored, so editing a class note takes effect on the next lint.
+   *
+   * Off by default, and off means the templates folder is read exactly as before. Turning
+   * it on in a vault without the Fileclass plugin also changes nothing: there is no index
+   * to read, so lint falls back to the folder rather than going quiet.
+   */
+  shapeSourceFileclass: boolean;
   shapeRefinementEnabled: boolean;
   shapeTemplatesFolder: string;
   shapeTypeTargetField: string;      // frontmatter dropdown
@@ -274,6 +296,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   shapeLintExcludeInboxFolder: false,
   shapeLintScope: "all",
   shapeLintFolders: [],
+  shapeSourceFileclass: false,
   shapeRefinementEnabled: false,
   shapeTemplatesFolder: "System/Templates",
   shapeTypeTargetField: "type",
@@ -417,6 +440,7 @@ export function normalizeForgeSettings(settings: ForgeSettings): ForgeSettings {
       DEFAULT_SETTINGS.shapeTemplatesFolder
     ),
     shapeTypeTargetField: normalizeSettingString(settings.shapeTypeTargetField, DEFAULT_SETTINGS.shapeTypeTargetField),
+    shapeSourceFileclass: settings.shapeSourceFileclass ?? DEFAULT_SETTINGS.shapeSourceFileclass,
     refinementSourceFileclass: settings.refinementSourceFileclass ?? DEFAULT_SETTINGS.refinementSourceFileclass,
     fieldOrderSourceFileclass: settings.fieldOrderSourceFileclass ?? DEFAULT_SETTINGS.fieldOrderSourceFileclass,
     conditionSourceFileclass: settings.conditionSourceFileclass ?? DEFAULT_SETTINGS.conditionSourceFileclass,

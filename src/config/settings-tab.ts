@@ -2389,6 +2389,8 @@ export class ForgeSettingsTab extends PluginSettingTab {
           })
         );
 
+      this.renderShapeSourceFileclass(el);
+
       new Setting(el)
         .setName("Allow empty headings")
         .setDesc(
@@ -2614,6 +2616,34 @@ export class ForgeSettingsTab extends PluginSettingTab {
             s.frontmatterSourceFileclass = value;
             await this.plugin.saveSettings();
             this.display();
+          })
+      );
+  }
+
+  private renderShapeSourceFileclass(el: HTMLElement): void {
+    const s = this.plugin.settings;
+    const available = isFileclassAvailable(this.app);
+
+    new Setting(el)
+      .setName("Take shapes from Fileclass class notes")
+      .setDesc(
+        available
+          ? "Lint reads each class note directly instead of a generated template file: its "
+            + "'## Shape' fence where it declares one, otherwise a shape derived from its "
+            + "'## Template' fence, with each generator turned into a wildcard. A class edit "
+            + "then takes effect on the next lint, with nothing generated in between."
+          : "Requires the Fileclass plugin, which is not installed or not enabled. Until then "
+            + "lint reads the templates folder, whether this is on or off."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(s.shapeSourceFileclass)
+          .onChange((value) => {
+            this.runAsync(async () => {
+              s.shapeSourceFileclass = value;
+              await this.plugin.saveSettings();
+              this.refreshSettingsTab();
+            });
           })
       );
   }

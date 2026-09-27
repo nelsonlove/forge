@@ -420,6 +420,12 @@ function buildShapes(context: ForgeSettingsDefinitionContext): SettingDefinition
     ]),
     group("Shape lint", [
       toggleControl("shapeLintEnabled", "Enable shape heading validation", "Validate note heading structure against shape templates.", shapesVisible),
+      toggleControl(
+        "shapeSourceFileclass",
+        "Take shapes from Fileclass class notes",
+        "Lint reads each class note directly instead of a generated template file: its '## Shape' fence where it declares one, otherwise a shape derived from its '## Template' fence with each generator turned into a wildcard. A class edit then takes effect on the next lint, with nothing generated in between. Falls back to the templates folder when the Fileclass plugin is absent.",
+        shapeLintVisible
+      ),
       toggleControl("shapeLintStrictMode", "Strict template matching", "Flag headings not defined in the matching shape template.", shapeLintVisible),
       toggleControl("shapeLintAllowEmptySections", "Allow empty headings", "Allow required headings that are present but empty.", shapeLintVisible),
       toggleControl("shapeLintExcludeInboxFolder", "Exclude inbox folder", "Skip inbox notes during shape lint.", shapeLintVisible),

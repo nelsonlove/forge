@@ -67,7 +67,8 @@ describe("declarative settings definitions", () => {
       "exportEnabled", "exportsFolder", "exportDashboardName", "exportPrivateEnabled", "exportRelationshipHeading",
       "shapesEnabled", "shapesFolder", "shapeIncludeSubfolders", "shapeRefinementEnabled", "shapeTemplatesFolder",
       "shapeInjectRelationships", "shapeRelationshipHeading", "shapeRelationshipHeadingLevelChoice",
-      "shapeRelationshipPosition", "shapeLintEnabled", "shapeLintStrictMode", "shapeLintAllowEmptySections",
+      "shapeRelationshipPosition", "shapeLintEnabled", "shapeSourceFileclass",
+      "shapeLintStrictMode", "shapeLintAllowEmptySections",
       "shapeLintExcludeInboxFolder", "shapeLintScope", "shapeRepairEnabled", "shapeRepairScope",
       "shapeRepairRunsFolder", "shapeRepairFileLinks", "shapeRepairHistoryRetentionCount",
     ];
