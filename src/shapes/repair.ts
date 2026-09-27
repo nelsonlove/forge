@@ -92,6 +92,18 @@ export interface ShapeRepairRunNoteArtifact {
   content: string;
 }
 
+/**
+ * Shape repair planned over documents handed in, with no vault and no Obsidian.
+ *
+ * A headless entry point whose only consumer today is this repository's test suite. The
+ * live repair command does not route through it: `runShapeRepair` in
+ * `src/commands/shape-repair.ts` builds its own cache with `buildShapeHeadingCache` and
+ * walks the vault itself, taking only `applyShapeRepair` and the artifact builders from
+ * this module.
+ *
+ * Like `runShapeLintForDocuments`, it works against whatever `ForgeShapeTemplate[]` it
+ * is given, so the `shapeSourceFileclass` setting does not reach here.
+ */
 export function planShapeRepairForDocuments(
   input: PlanShapeRepairForDocumentsInput
 ): ShapeRepairPlanResult {
