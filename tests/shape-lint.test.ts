@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, it } from "node:test";
 import {
   collectShapeNamesFromDocuments,
@@ -7,9 +9,17 @@ import {
   runShapeLintForDocuments,
   templateFileToShapeName,
 } from "../src/shapes/lint.js";
+import {
+  deriveShapeHeadings,
+  deriveShapeHeadingText,
+  shapeHeadingsForClassNote,
+} from "../src/shapes/derive.js";
 import { shapeNameToTemplateFileName } from "../src/shapes/identity.js";
 import { DEFAULT_SETTINGS } from "../src/config/settings.js";
 import type { ForgeDocument } from "../src/linting/model.js";
+
+/** The repository root, from the compiled test's location under `.tmp-test/tests/`. */
+const repoRoot = path.resolve(__dirname, "..", "..");
 
 const baseDocument: ForgeDocument = {
   path: "Projects/Example.md",
@@ -624,5 +634,208 @@ describe("shape lint with a list-valued type field", () => {
     const missing = result.results.filter((r) => r.rule === "shape_heading_missing");
     assert.equal(missing.length, 1);
     assert.match(missing[0].message, /required by shape 'Task'/);
+  });
+});
+
+describe("the generator-to-wildcard pass", () => {
+  it("keeps a heading that is nothing but literal words", () => {
+    assert.equal(deriveShapeHeadingText("Why it matters"), "Why it matters");
+  });
+
+  it("keeps a {{TITLE}}, {{VALUE:…}} or {{date:…}} token exactly as written", () => {
+    assert.equal(deriveShapeHeadingText("Status of {{VALUE:url}}"), "Status of {{VALUE:url}}");
+    assert.equal(deriveShapeHeadingText("Log for {{date:YYYY-MM-DD}}"), "Log for {{date:YYYY-MM-DD}}");
+  });
+
+  it("turns an inline-code render into a placeholder and keeps the words around it", () => {
+    assert.equal(deriveShapeHeadingText("Status `INPUT[status]`"), "Status {{INPUT}}");
+    assert.equal(deriveShapeHeadingText("`BUTTON[archive]` now"), "{{BUTTON}} now");
+  });
+
+  it("collapses a heading that reduces to nothing but a placeholder", () => {
+    assert.equal(deriveShapeHeadingText("`VIEW[{title}][text]`"), "{{TITLE}}");
+    assert.equal(deriveShapeHeadingText("[{{TITLE}}]({{VALUE:url}})"), "{{TITLE}}");
+    assert.equal(deriveShapeHeadingText("{{date:YYYY-MM-DD}}"), "{{TITLE}}");
+  });
+
+  it("never collapses a heading that carries no placeholder at all", () => {
+    // Punctuation is not a word, but a literal heading is still literal.
+    assert.equal(deriveShapeHeadingText("---"), "---");
+    assert.equal(deriveShapeHeadingText("`someCall()`"), "`someCall()`");
+  });
+
+  it("leaves an inline-code span that is not a render alone", () => {
+    assert.equal(deriveShapeHeadingText("Use `npm test` first"), "Use `npm test` first");
+  });
+
+  it("treats an unclosed backtick run as literal text", () => {
+    assert.equal(deriveShapeHeadingText("Status `INPUT[x"), "Status `INPUT[x");
+  });
+
+  it("derives a fence into headings at the levels written, ignoring everything else", () => {
+    const fence = [
+      "---", "status: draft", "---",
+      "# `VIEW[{title}][text]`",
+      "",
+      "Some prose that is not a heading.",
+      "",
+      "| a | b |", "| - | - |",
+      "",
+      "```js-engine", "// # Not a heading", "```",
+      "",
+      "## Why it matters",
+      "### Detail for {{VALUE:url}}",
+    ].join("\n");
+
+    assert.deepEqual(
+      deriveShapeHeadings(fence).map((h) => ({ level: h.level, text: h.text })),
+      [
+        { level: 1, text: "{{TITLE}}" },
+        { level: 2, text: "Why it matters" },
+        { level: 3, text: "Detail for {{VALUE:url}}" },
+      ]
+    );
+  });
+
+  it("derives nothing from a fence with no headings", () => {
+    assert.deepEqual(deriveShapeHeadings("Just prose.\n\n| a |\n| - |\n"), []);
+  });
+});
+
+describe("a class note's shape, and which fence it comes from", () => {
+  const settings = { ...DEFAULT_SETTINGS, shapeLintEnabled: true, shapeTypeTargetField: "type" };
+  const doc = (type: unknown, content: string): ForgeDocument => ({
+    ...baseDocument,
+    content,
+    frontmatter: { type },
+    hasFrontmatter: true,
+  });
+
+  const templateFence = [
+    "## Template", "", "```md",
+    "# [{{TITLE}}]({{VALUE:url}})",
+    "## Why it matters",
+    "## Status",
+    "```",
+  ].join("\n");
+
+  const shapeFence = [
+    "## Shape", "", "```md",
+    "# {{TITLE}}",
+    "## Why it matters",
+    "### Status key",
+    "```",
+  ].join("\n");
+
+  const texts = (note: string) =>
+    shapeHeadingsForClassNote(note).map((h) => `${"#".repeat(h.level)} ${h.text}`);
+
+  it("derives from ## Template when the class declares no ## Shape", () => {
+    const note = `---\ntitle: Link\n---\n\n# Link\n\nProse.\n\n${templateFence}\n`;
+    assert.deepEqual(texts(note), ["# {{TITLE}}", "## Why it matters", "## Status"]);
+  });
+
+  it("takes an explicit ## Shape verbatim, and never derives it", () => {
+    const note = `---\ntitle: Link\n---\n\n# Link\n\n${shapeFence}\n`;
+    assert.deepEqual(texts(note), ["# {{TITLE}}", "## Why it matters", "### Status key"]);
+  });
+
+  it("lets an explicit ## Shape win over a ## Template, whichever comes first", () => {
+    const shapeFirst = `# Link\n\n${shapeFence}\n\n${templateFence}\n`;
+    const templateFirst = `# Link\n\n${templateFence}\n\n${shapeFence}\n`;
+    const expected = ["# {{TITLE}}", "## Why it matters", "### Status key"];
+
+    assert.deepEqual(texts(shapeFirst), expected);
+    assert.deepEqual(texts(templateFirst), expected);
+  });
+
+  it("gives a class with neither fence no shape at all", () => {
+    assert.deepEqual(shapeHeadingsForClassNote("---\ntitle: Bare\n---\n\n# Bare\n\nProse only.\n"), []);
+  });
+
+  it("gives a class with an empty ## Template fence no shape, rather than an empty one", () => {
+    assert.deepEqual(shapeHeadingsForClassNote("# Bare\n\n## Template\n\n```md\n```\n"), []);
+  });
+
+  it("does not read a fence out of the class note's own frontmatter", () => {
+    const note = "---\nnote: |\n  ## Shape\n  ```md\n  # Wrong\n  ```\n---\n\n# Real\n\n" + templateFence + "\n";
+    assert.deepEqual(texts(note), ["# {{TITLE}}", "## Why it matters", "## Status"]);
+  });
+
+  it("derives a shape the matcher can actually match against a real note", () => {
+    const derived = shapeHeadingsForClassNote(`# Link\n\n${templateFence}\n`);
+    const clean = runShapeLintForDocuments({
+      settings,
+      templates: [{ shape: "Link", headings: derived }],
+      documents: [doc("Link", [
+        "---", "type: Link", "---", "",
+        "# [Some page](https://example.com)",
+        "## Why it matters", "text",
+        "## Status", "text",
+      ].join("\n"))],
+    });
+    assert.deepEqual(clean.results, []);
+
+    const broken = runShapeLintForDocuments({
+      settings,
+      templates: [{ shape: "Link", headings: derived }],
+      documents: [doc("Link", [
+        "---", "type: Link", "---", "",
+        "# [Some page](https://example.com)",
+        "## Why it matters", "text",
+      ].join("\n"))],
+    });
+    const missing = broken.results.filter((r) => r.rule === "shape_heading_missing");
+    assert.equal(missing.length, 1);
+    assert.match(missing[0].message, /Status/);
+  });
+});
+
+describe("where the shape source comes from", () => {
+  it("reads the templates folder unless asked otherwise", () => {
+    assert.equal(DEFAULT_SETTINGS.shapeSourceFileclass, false);
+  });
+
+  /**
+   * `buildShapeHeadingCache` needs a live Obsidian `App`, so its gate cannot be called
+   * from here. What it must never become, though, is reachable only while
+   * `refinementSourceFileclass` is on: step 3 of the vault's adoption sets that to
+   * false, and shape lint would then go silent for every class with nothing reporting
+   * it. That is a one-line mistake, so it is pinned on the source rather than left to
+   * a reviewer's eye.
+   */
+  it("gates the class-note source on shapeSourceFileclass alone", () => {
+    const text = readFileSync(path.join(repoRoot, "src/commands/shape-lint.ts"), "utf8");
+    assert.match(text, /if \(settings\.shapeSourceFileclass\)/);
+
+    // Prose may name the other setting — explaining why the two are apart is the point.
+    // Code may not.
+    const code = text.split("\n").filter((line) => {
+      const trimmed = line.trim();
+      return trimmed !== "" && !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+    });
+    assert.deepEqual(
+      code.filter((line) => line.includes("refinementSourceFileclass")),
+      [],
+      "the class-note lint source must not depend on the refinement setting"
+    );
+  });
+
+  it("has no caller in src for the headless entry points", () => {
+    const sources = [
+      "src/shapes/lint.ts", "src/shapes/repair.ts", "src/shapes/lint-service.ts",
+      "src/commands/shape-lint.ts", "src/commands/shape-repair.ts", "src/commands/run-shape-lint.ts",
+      "src/linting/engine.ts", "src/main.ts",
+    ];
+
+    for (const name of sources) {
+      const text = readFileSync(path.join(repoRoot, name), "utf8");
+      // The definition line in lint.ts / repair.ts is the only permitted occurrence.
+      const calls = text.split("\n").filter((line) =>
+        /\b(runShapeLintForDocuments|planShapeRepairForDocuments)\s*\(/.test(line) &&
+        !line.trim().startsWith("export function")
+      );
+      assert.deepEqual(calls, [], `${name} must not call the headless entry points`);
+    }
   });
 });

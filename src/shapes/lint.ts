@@ -49,6 +49,20 @@ export interface ShapeLintRunResult {
   infos: LintResult[];
 }
 
+/**
+ * Shape lint over documents handed in, with no vault and no Obsidian.
+ *
+ * A headless entry point whose only consumer today is this repository's test suite —
+ * nothing in `src/` calls it, and the live lint path is `ShapeLintService.scan`, which
+ * builds its cache through `buildShapeHeadingCache`. Worth knowing before reading it as
+ * production behaviour.
+ *
+ * It lints against whatever `ForgeShapeTemplate[]` the caller hands it, so the
+ * `shapeSourceFileclass` setting does not reach here: a caller that wants class notes
+ * as the source needs a collector that turns class notes into templates, and no such
+ * collector exists. Whoever needs one should write it to fit their real case rather
+ * than inherit a signature guessed at in advance.
+ */
 export function runShapeLintForDocuments(input: RunShapeLintForDocumentsInput): ShapeLintRunResult {
   const { documents, settings } = input;
   const exemptPaths = buildShapeLintExemptList(settings, input.exemptPaths ?? []);
