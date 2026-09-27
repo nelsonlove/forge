@@ -19,23 +19,42 @@
  * way a plain section would. And nothing else can be mistaken for the contract: prose,
  * examples and other fences elsewhere in the note are never read.
  *
- * Only extraction lives here. The pipeline is untouched: refinement still compiles
- * sources into templates, and lint still reads only templates, so editing a class note
- * changes nothing until refinement is deliberately run.
+ * Only extraction lives here — two callers read the blocks it finds, and they read them
+ * at different times. Refinement compiles a `## Shape` block into a template note, so a
+ * class edit reaches lint only when refinement is deliberately run. Shape lint, with
+ * `shapeSourceFileclass` on, reads the blocks itself at lint time: a class's `## Shape`
+ * where it declares one, and otherwise a shape derived from its `## Template` fence, so
+ * a class edit takes effect on the next lint with nothing generated in between.
  */
 
-const SHAPE_HEADING = /^##\s+Shape\s*$/i;
 const ANY_HEADING = /^#{1,2}\s+\S/;
 const FENCE = /^\s{0,3}(`{3,}|~{3,})(.*)$/;
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function sectionHeading(headingName: string): RegExp {
+  return new RegExp(`^##\\s+${escapeRegex(headingName)}\\s*$`, "i");
+}
+
 /**
- * The fenced structure block of a class note body, or null when the note declares none.
+ * The fenced block under one H2 of a class note body, or null when the note has none.
  *
- * The rule, precisely: the first fenced code block that starts under a `## Shape`
- * heading, before the next H1/H2 ends the section. An unclosed fence reads to the end
- * of the section rather than swallowing the rest of the note.
+ * The rule, precisely: the first fenced code block that starts under the named H2,
+ * before the next H1/H2 ends the section. An unclosed fence reads to the end of the
+ * section rather than swallowing the rest of the note.
+ *
+ * `headingName` is which H2 to read. It defaults to `Shape`, the structure contract a
+ * class declares outright. The other caller asks for `Template`, the body a new note is
+ * born as, which is read the same way and then derived into a shape — see
+ * `src/shapes/derive.ts`. Both blocks are fenced for the same two reasons: fenced
+ * content stands outside the note's own heading tree, so it is read verbatim at the
+ * levels written with no promotion, and nothing else in the note — prose, examples,
+ * other fences — can be mistaken for the contract.
  */
-export function extractShapeBlock(body: string): string | null {
+export function extractShapeBlock(body: string, headingName = "Shape"): string | null {
+  const heading = sectionHeading(headingName);
   const lines = body.split("\n");
   let inSection = false;
   let fence: string | null = null;
@@ -43,7 +62,7 @@ export function extractShapeBlock(body: string): string | null {
 
   for (const line of lines) {
     if (!inSection) {
-      if (SHAPE_HEADING.test(line)) inSection = true;
+      if (heading.test(line)) inSection = true;
       continue;
     }
 

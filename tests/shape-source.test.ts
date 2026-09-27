@@ -52,3 +52,36 @@ describe("class-note shape block extraction", () => {
     assert.equal(extractShapeBlock("## Shape\n```md\n```\n"), null);
   });
 });
+
+describe("class-note block extraction by heading name", () => {
+  const body = [
+    "# Link", "", "Prose about the class.", "",
+    "## Shape", "", "```md", "# {{TITLE}}", "## Why it matters", "```", "",
+    "## Template", "", "```md", "# [{{TITLE}}]({{VALUE:url}})", "## Why it matters", "## Status", "```", "",
+    "## History", "more prose",
+  ].join("\n");
+
+  it("still reads ## Shape when no heading name is given", () => {
+    assert.equal(extractShapeBlock(body), "# {{TITLE}}\n## Why it matters");
+  });
+
+  it("reads the named H2's fence instead", () => {
+    assert.equal(
+      extractShapeBlock(body, "Template"),
+      "# [{{TITLE}}]({{VALUE:url}})\n## Why it matters\n## Status"
+    );
+  });
+
+  it("matches the heading name case-insensitively, and only whole", () => {
+    assert.equal(extractShapeBlock("## template\n```md\n# X\n```", "Template"), "# X");
+    assert.equal(extractShapeBlock("## Templates\n```md\n# X\n```", "Template"), null);
+  });
+
+  it("returns null for a heading the note does not carry", () => {
+    assert.equal(extractShapeBlock("## Shape\n```md\n# X\n```", "Template"), null);
+  });
+
+  it("does not let a heading name with regex characters match as a pattern", () => {
+    assert.equal(extractShapeBlock("## Shape\n```md\n# X\n```", "S.ape"), null);
+  });
+});
