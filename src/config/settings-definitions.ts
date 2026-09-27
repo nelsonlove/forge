@@ -423,7 +423,7 @@ function buildShapes(context: ForgeSettingsDefinitionContext): SettingDefinition
       toggleControl(
         "shapeSourceFileclass",
         "Take shapes from Fileclass class notes",
-        "Lint reads each class note directly instead of a generated template file: its '## Shape' fence where it declares one, otherwise a shape derived from its '## Template' fence with each generator turned into a wildcard. A class edit then takes effect on the next lint, with nothing generated in between. Falls back to the templates folder when the Fileclass plugin is absent.",
+        "Shape lint and Shape Repair read each class note directly instead of a generated template file: its '## Shape' fence where it declares one, otherwise a shape derived from its '## Template' fence with each generator turned into a wildcard. A class edit then takes effect on the next run, with nothing generated in between. This replaces the templates folder rather than adding to it, so a shape defined only by a shape note is no longer checked. Shape Repair is affected too — it inserts the headings these shapes require. Falls back to the templates folder when the Fileclass plugin is absent or no class note yields a shape.",
         shapeLintVisible
       ),
       toggleControl("shapeLintStrictMode", "Strict template matching", "Flag headings not defined in the matching shape template.", shapeLintVisible),

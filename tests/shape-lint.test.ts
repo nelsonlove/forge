@@ -757,6 +757,61 @@ describe("a class note's shape, and which fence it comes from", () => {
     assert.deepEqual(shapeHeadingsForClassNote("# Bare\n\n## Template\n\n```md\n```\n"), []);
   });
 
+  /**
+   * "An explicit Shape wins" has to mean "wins when it yields a block", not "wins when
+   * the heading is there" — otherwise a class whose `## Shape` section is unusable gets
+   * no shape at all, when it plainly should fall through to its Template. So the
+   * precedence is keyed on what the extractor returns, never on a heading test. All
+   * three shapes of unusable section below are real classes in the live vault:
+   * `Meta/Artifact` (empty fence), `Meta/Artifact/Report` (bare heading) and `Task/Spec`
+   * (prose instead of a fence).
+   */
+  it("falls through to the Template when a ## Shape section yields no block", () => {
+    const derived = ["# {{TITLE}}", "## Why it matters", "## Status"];
+
+    const emptyFence = `# C\n\n## Shape\n\n\`\`\`md\n\`\`\`\n\n${templateFence}\n`;
+    assert.deepEqual(texts(emptyFence), derived);
+
+    const bareHeading = `# C\n\n## Shape\n\n${templateFence}\n`;
+    assert.deepEqual(texts(bareHeading), derived);
+
+    const proseOnly = `# C\n\n## Shape\n\nThe shape is the writing contract's.\n\n${templateFence}\n`;
+    assert.deepEqual(texts(proseOnly), derived);
+  });
+
+  it("loses the headings after a nested fence of the same length, and does not invent them", () => {
+    // CommonMark: a bare ``` closes a ``` fence. So a template that nests at the same
+    // length truncates, and the derived shape names fewer headings than it should —
+    // which reports nothing rather than reporting wrongly. A class note that nests must
+    // open the outer fence longer.
+    const nested = [
+      "## Template", "", "```md",
+      "# {{TITLE}}", "",
+      "```js-engine", "// a view", "```", "",
+      "## Why it matters", "## Status",
+      "```",
+    ].join("\n");
+    assert.deepEqual(texts(`# C\n\n${nested}\n`), ["# {{TITLE}}"]);
+
+    const longer = nested.replace("```md", "````md").replace(/```$/, "````");
+    assert.deepEqual(
+      texts(`# C\n\n${longer}\n`),
+      ["# {{TITLE}}", "## Why it matters", "## Status"]
+    );
+  });
+
+  it("gives a class-files entry that is not really a class no shape at all", () => {
+    // The Fileclass index holds an entry for every markdown file in the class-files
+    // folder, so a task note filed there is walked like a class. It carries no fence.
+    const taskNote = [
+      "---", "title: Four parked classes still bind folders by path", "type: Task", "---", "",
+      "# Four parked classes still bind folders by path", "",
+      "## Context", "Prose.", "",
+      "## Handoff", "Prose.",
+    ].join("\n");
+    assert.deepEqual(shapeHeadingsForClassNote(taskNote), []);
+  });
+
   it("does not read a fence out of the class note's own frontmatter", () => {
     const note = "---\nnote: |\n  ## Shape\n  ```md\n  # Wrong\n  ```\n---\n\n# Real\n\n" + templateFence + "\n";
     assert.deepEqual(texts(note), ["# {{TITLE}}", "## Why it matters", "## Status"]);
@@ -819,6 +874,18 @@ describe("where the shape source comes from", () => {
       [],
       "the class-note lint source must not depend on the refinement setting"
     );
+  });
+
+  /**
+   * The class-note pass needs a live Obsidian `App` too, so this is the same kind of
+   * pin as the gate above. It guards the one outcome the whole change exists to
+   * prevent: an empty heading cache means lint checks nothing and reports a clean run,
+   * which is indistinguishable from a healthy vault. Falling back is always safe;
+   * returning an empty map never is.
+   */
+  it("never lets the class-note pass hand back an empty cache", () => {
+    const text = readFileSync(path.join(repoRoot, "src/commands/shape-lint.ts"), "utf8");
+    assert.match(text, /if \(cache\.size === 0\) \{[\s\S]*?return null;/);
   });
 
   it("has no caller in src for the headless entry points", () => {

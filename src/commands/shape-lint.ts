@@ -30,11 +30,23 @@ export type {
  * and is simply not linted — honest, but silent, which is why the count belongs in a
  * lint run's digest rather than in a finding.
  *
- * Returns null, rather than an empty map, when Fileclass is absent or has not loaded.
- * The two are different answers: null means "this source cannot be read here", and the
- * caller falls back to the templates folder so a vault without the plugin keeps working
- * exactly as before. An empty map would mean "Fileclass answered, and no class carries
- * a block", which would silently switch linting off.
+ * **Never returns an empty map.** Null and empty are different answers, and only one of
+ * them is safe: null means "this source has nothing to say here", and the caller falls
+ * back to the templates folder, so nothing is ever linted against less than before. An
+ * empty map would mean "lint against nothing", which is indistinguishable from a healthy
+ * run and is exactly the failure this whole change exists to end. There are more ways to
+ * reach it than there look to be — Fileclass absent, the plugin loaded but its index not
+ * yet scanned, an installed build with no `getFileClassFile`, or simply no class note
+ * carrying either fence — so the rule is applied once, at the end, rather than guessed at
+ * per cause.
+ *
+ * The index is third-party, so every call into it is defended: a throw here would abort
+ * the whole lint run and shape repair with it, and `fileClassNames` is not guaranteed to
+ * be an array. That matches how `classesForFile` and `fieldOrderForFile` treat it.
+ *
+ * Note that the index holds an entry for every markdown file in the class-files folder,
+ * whether or not it is really a class definition. Such an entry carries no fence, so it
+ * yields no shape and costs one read.
  */
 async function buildShapeHeadingCacheFromFileclass(
   app: App
@@ -43,13 +55,26 @@ async function buildShapeHeadingCacheFromFileclass(
   const index = getFileclassIndex(app);
   if (!index) return null;
 
+  let classNames: unknown[];
+  try {
+    classNames = [...(index.fileClassNames ?? [])];
+  } catch {
+    return null; // not iterable — this index cannot answer the question
+  }
+
   const cache = new Map<string, ParsedHeading[]>();
 
-  for (const className of index.fileClassNames ?? []) {
+  for (const className of classNames) {
+    if (typeof className !== "string") continue;
     const key = className.trim().toLowerCase();
     if (!key) continue;
 
-    const file = index.getFileClassFile?.(className);
+    let file: TFile | null | undefined;
+    try {
+      file = index.getFileClassFile?.(className);
+    } catch {
+      continue;
+    }
     if (!file) continue;
 
     let raw: string;
@@ -64,6 +89,14 @@ async function buildShapeHeadingCacheFromFileclass(
     cache.set(key, headings);
   }
 
+  if (cache.size === 0) {
+    console.warn(
+      "[Forge] Shape source is set to Fileclass class notes, but no class note yielded a "
+      + "shape. Falling back to the templates folder so shape lint is not silently disabled."
+    );
+    return null;
+  }
+
   return cache;
 }
 
@@ -76,6 +109,13 @@ export async function buildShapeHeadingCache(
   // unchanged for anyone who has not opted in. This gate stands alone deliberately: it
   // is not tied to `refinementSourceFileclass`, which a vault adopting this source turns
   // OFF once nothing generates template files any more.
+  //
+  // The class notes REPLACE the templates folder rather than joining it, which is what
+  // the setting is for: one source, so the two cannot drift. The cost is that a vault
+  // running both shape notes and Fileclass loses any shape that only a shape note
+  // defines. That is the right trade where the class notes are the whole truth, and the
+  // wrong one where they are half of it — which is why this is a setting and not a
+  // rewrite.
   if (settings.shapeSourceFileclass) {
     const fromClassNotes = await buildShapeHeadingCacheFromFileclass(app);
     if (fromClassNotes) return fromClassNotes;

@@ -127,12 +127,29 @@ export function deriveShapeHeadings(templateBlock: string): ParsedHeading[] {
 /**
  * The shape one class note declares, and the precedence between its two fences.
  *
- * An explicit `## Shape` always wins, read verbatim and never derived — that block
- * exists precisely for the classes whose derived shape would be wrong, and deriving it
- * again would defeat the override. Only where a class declares no `## Shape` is its
- * `## Template` fence read and derived. A class with neither fence has no shape: it
+ * A non-empty `## Shape` wins, read verbatim and never derived — that block exists
+ * precisely for the classes whose derived shape would be wrong, and deriving it again
+ * would defeat the override. Only where a class declares no usable `## Shape` is its
+ * `## Template` fence read and derived. A class with neither has no shape: it
  * contributes nothing and is not linted, which is honest but silent, so the count of
  * such classes belongs in a lint run's digest.
+ *
+ * Two edges are worth knowing, because both are quiet rather than loud.
+ *
+ * A `## Shape` heading with an EMPTY fence under it counts as no shape, not as "this
+ * class has no structural contract" — `extractShapeBlock` returns null for an empty
+ * fence, so the `## Template` fence is derived instead. That is deliberate consistency
+ * with refinement, which has always read an empty fence as nothing to compile; a class
+ * that means "no contract" says so by carrying neither fence.
+ *
+ * And a fence closes on the first run of its own character at least as long as its
+ * opener, which is CommonMark's rule and the one the extractor follows. So a
+ * three-backtick `## Template` fence containing a nested three-backtick block ends at
+ * the nested block's closing line, and every heading after it is lost from the derived
+ * shape. A class note that nests fences must open the outer one longer — ````md — as
+ * the class notes that already nest do. The failure is a shape naming fewer headings
+ * than it should, which reports nothing rather than reporting wrongly, so it is the safe
+ * direction; it is still worth catching when a class is written.
  *
  * Takes the class note's whole text, leading frontmatter and all.
  */
