@@ -60,8 +60,23 @@ export function extractShapeBlock(body: string, headingName = "Shape"): string |
   let fence: string | null = null;
   const collected: string[] = [];
 
+  // A fence seen while looking for the section heading. A `## Template` or `## Shape`
+  // line inside another section's fence is that fence's content, not this section.
+  let outerFence: string | null = null;
+
   for (const line of lines) {
     if (!inSection) {
+      const marker = line.match(FENCE);
+      if (outerFence !== null) {
+        if (marker && marker[1][0] === outerFence[0] && marker[1].length >= outerFence.length && marker[2].trim() === "") {
+          outerFence = null;
+        }
+        continue;
+      }
+      if (marker) {
+        outerFence = marker[1];
+        continue;
+      }
       if (heading.test(line)) inSection = true;
       continue;
     }
