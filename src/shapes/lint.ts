@@ -15,12 +15,19 @@ export interface ParsedHeading {
   level: number;
   text: string;
   lineIndex: number;
+  /**
+   * The heading need not be present. Set only by the derivation, on a template's leading
+   * `# {{TITLE}}` (see `deriveShapeHeadings`): a note that carries a title heading has its
+   * sections checked under it, and a note that carries none has them checked at the top.
+   */
+  optional?: boolean;
 }
 
 export interface TemplateNode {
   text: string;
   level: number;
   children: TemplateNode[];
+  optional?: boolean;
 }
 
 export interface ForgeShapeTemplate {
@@ -278,6 +285,7 @@ export function buildTemplateTree(headings: ParsedHeading[]): TemplateNode[] {
 
   for (const heading of headings) {
     const node: TemplateNode = { text: heading.text, level: heading.level, children: [] };
+    if (heading.optional) node.optional = true;
 
     while (stack.length > 0 && stack[stack.length - 1].level >= heading.level) {
       stack.pop();
@@ -303,6 +311,37 @@ export function flattenTemplateTree(nodes: TemplateNode[]): TemplateNode[] {
   };
   nodes.forEach(visit);
   return result;
+}
+
+/**
+ * Template nodes as they apply to one level of a note: an optional node that no section
+ * of that level matches is replaced by its children, so they are looked for where the
+ * note has them, at that same level. A matched optional node stays, and its children are
+ * looked for under the section it matched. Lint and repair both call this, so an absent
+ * optional heading is never reported missing and never inserted.
+ */
+export function expandOptionalNodes(
+  templateNodes: TemplateNode[],
+  sections: { headingText: string; headingLevel: number }[]
+): TemplateNode[] {
+  const out: TemplateNode[] = [];
+  for (const node of templateNodes) {
+    // The same test the matchers apply, including the fixed-sibling reservation: a
+    // section a fixed sibling claims cannot be the title, so it does not make it present.
+    const present = !node.optional || sections.some((section) =>
+      section.headingLevel === node.level &&
+      headingTextMatches(node.text, section.headingText) &&
+      !templateNodes.some((sibling) =>
+        sibling !== node &&
+        !hasHeadingPlaceholder(sibling.text) &&
+        sibling.level === section.headingLevel &&
+        headingTextMatches(sibling.text, section.headingText)
+      )
+    );
+    if (present) out.push(node);
+    else out.push(...expandOptionalNodes(node.children, sections));
+  }
+  return out;
 }
 
 export function extractHeadings(content: string): ParsedHeading[] {
@@ -338,6 +377,7 @@ function lintLevel(
    */
   consumedOut: Set<DocSection>
 ): void {
+  templateNodes = expandOptionalNodes(templateNodes, docSections);
   const consumed = new Set<DocSection>();
   const matchedSections = new Map<TemplateNode, DocSection>();
 

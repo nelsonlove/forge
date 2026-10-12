@@ -18,6 +18,10 @@
  *
  * Where the derived shape would be wrong, a class declares an explicit `## Shape` and
  * that block wins outright — this module is never consulted for such a class.
+ *
+ * One difference is deliberate: a template's leading `# {{TITLE}}` is derived as an
+ * optional heading, so a note without a title heading is checked at its top level
+ * instead of being reported missing its title (see `deriveShapeHeadings`).
  */
 
 import { extractShapeBlock } from "../fileclass/shape-source.js";
@@ -120,6 +124,13 @@ export function deriveShapeHeadings(templateBlock: string): ParsedHeading[] {
     if (!text) continue;
     headings.push({ level: heading.level, text, lineIndex: heading.lineIndex });
   }
+
+  // A template's leading title heading is not required of a note. Many notes carry no H1
+  // (daily notes, imported batches), and their sections then sit at the top level; a
+  // note that does carry one has its sections checked under it. Only the first heading,
+  // and only an H1 that derives to the bare title wildcard, is made optional.
+  const first = headings[0];
+  if (first && first.level === 1 && first.text === "{{TITLE}}") first.optional = true;
 
   return headings;
 }

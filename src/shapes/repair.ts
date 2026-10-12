@@ -4,6 +4,7 @@ import type { ForgeSettings } from "../config/settings.js";
 import {
   buildShapeHeadingCacheFromTemplates,
   buildTemplateTree,
+  expandOptionalNodes,
   type ForgeShapeTemplate,
   type ParsedHeading,
   type TemplateNode,
@@ -393,6 +394,7 @@ function repairLevel(
   descriptions: string[],
   parentText?: string
 ): DocSection[] {
+  templateNodes = expandOptionalNodes(templateNodes, docSections);
   const result: DocSection[] = [];
   const consumed = new Set<DocSection>();
   const matchedSections = new Map<TemplateNode, DocSection>();
