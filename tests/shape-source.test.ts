@@ -85,3 +85,14 @@ describe("class-note block extraction by heading name", () => {
     assert.equal(extractShapeBlock("## Shape\n```md\n# X\n```", "S.ape"), null);
   });
 });
+
+describe("class-note block extraction skips fenced lines while it looks for the heading", () => {
+  it("does not read a ## Template line inside the Shape fence as the Template section", () => {
+    const body = "## Shape\n\n```md\n# A\n## Template\n```\n\n## Template\n\n```md\n# Real\n```\n";
+    assert.equal(extractShapeBlock(body, "Template"), "# Real");
+  });
+
+  it("returns null when the named heading appears only inside a fence", () => {
+    assert.equal(extractShapeBlock("````md\n## Shape\n\n```md\n# Decoy\n```\n````\n"), null);
+  });
+});
