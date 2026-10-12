@@ -935,6 +935,16 @@ describe("a template's leading title heading is optional", () => {
     assert.deepEqual(messages, ["Missing heading: '## Outcome' (required by shape 'Task')"]);
   });
 
+  it("treats the title as absent when the only H1 is claimed by a fixed sibling", () => {
+    const withSibling = deriveShapeHeadings("# {{TITLE}}\n## Overview\n# Notes\n");
+    const messages = runShapeLintForDocuments({
+      documents: [{ ...baseDocument, content: "---\ntype: Task\n---\n## Overview\n\nx\n\n# Notes\n\ny\n", frontmatter: { type: "Task" } }],
+      templates: [{ shape: "Task", headings: withSibling }],
+      settings,
+    }).results.map((r) => r.message);
+    assert.deepEqual(messages, []);
+  });
+
   it("does not let repair insert an absent optional title", () => {
     const result = applyShapeRepair("## Overview\n\nx\n", derived);
     assert.equal(result.repairedContent.includes("{{TITLE}}"), false);

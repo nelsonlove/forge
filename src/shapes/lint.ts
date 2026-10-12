@@ -326,8 +326,17 @@ export function expandOptionalNodes(
 ): TemplateNode[] {
   const out: TemplateNode[] = [];
   for (const node of templateNodes) {
+    // The same test the matchers apply, including the fixed-sibling reservation: a
+    // section a fixed sibling claims cannot be the title, so it does not make it present.
     const present = !node.optional || sections.some((section) =>
-      section.headingLevel === node.level && headingTextMatches(node.text, section.headingText)
+      section.headingLevel === node.level &&
+      headingTextMatches(node.text, section.headingText) &&
+      !templateNodes.some((sibling) =>
+        sibling !== node &&
+        !hasHeadingPlaceholder(sibling.text) &&
+        sibling.level === section.headingLevel &&
+        headingTextMatches(sibling.text, section.headingText)
+      )
     );
     if (present) out.push(node);
     else out.push(...expandOptionalNodes(node.children, sections));
