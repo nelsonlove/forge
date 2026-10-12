@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
+import { applyShapeRepair } from "../src/shapes/repair.js";
 import {
   collectShapeNamesFromDocuments,
   collectShapeTemplatesFromDocuments,
@@ -904,5 +905,52 @@ describe("where the shape source comes from", () => {
       );
       assert.deepEqual(calls, [], `${name} must not call the headless entry points`);
     }
+  });
+});
+
+describe("a template's leading title heading is optional", () => {
+  const settings = { ...DEFAULT_SETTINGS, shapeLintEnabled: true, shapeTypeTargetField: "type" };
+  const derived = deriveShapeHeadings("# {{TITLE}}\n\n## Overview\n\n## Outcome\n");
+  const run = (content: string) =>
+    runShapeLintForDocuments({
+      documents: [{ ...baseDocument, content, frontmatter: { type: "Task" } }],
+      templates: [{ shape: "Task", headings: derived }],
+      settings,
+    }).results.map((r) => r.message);
+
+  it("marks only a leading H1 that derives to the bare title as optional", () => {
+    assert.equal(derived[0].optional, true);
+    assert.equal(derived[1].optional, undefined);
+    assert.equal(deriveShapeHeadings("## Intro\n# {{TITLE}}\n")[1].optional, undefined);
+    assert.equal(deriveShapeHeadings("# Fixed title\n## A\n")[0].optional, undefined);
+  });
+
+  it("checks the sections under the title when the note has one", () => {
+    assert.deepEqual(run("---\ntype: Task\n---\n# My task\n\n## Overview\n\nx\n\n## Outcome\n\ny\n"), []);
+  });
+
+  it("checks the sections at the top when the note has no title, and reports no missing title", () => {
+    assert.deepEqual(run("---\ntype: Task\n---\n## Overview\n\nx\n\n## Outcome\n\ny\n"), []);
+    const messages = run("---\ntype: Task\n---\n## Overview\n\nx\n");
+    assert.deepEqual(messages, ["Missing heading: '## Outcome' (required by shape 'Task')"]);
+  });
+
+  it("does not let repair insert an absent optional title", () => {
+    const result = applyShapeRepair("## Overview\n\nx\n", derived);
+    assert.equal(result.repairedContent.includes("{{TITLE}}"), false);
+    assert.ok(result.descriptions.some((d) => d.includes("## Outcome")));
+  });
+});
+
+describe("a ## Shape or ## Template line inside another fence is not that section", () => {
+  it("finds no ## Shape when the only one is inside the ## Template fence", () => {
+    const note = [
+      "# Class", "", "## Template", "", "````md", "# {{TITLE}}", "## Overview", "## Shape", "",
+      "```md", "# Decoy", "```", "", "## Template", "````", "",
+    ].join("\n");
+    assert.deepEqual(
+      shapeHeadingsForClassNote(note).map((h) => `${"#".repeat(h.level)} ${h.text}`),
+      ["# {{TITLE}}", "## Overview", "## Shape", "## Template"]
+    );
   });
 });
